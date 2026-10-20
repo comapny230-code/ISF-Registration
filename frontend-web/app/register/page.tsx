@@ -656,18 +656,6 @@ export default function RegisterPage() {
               <span className="info-label">Official Email:</span>
               <span className="info-val">{registered.email}</span>
             </div>
-            {registered.redgNo && (
-              <div className="info-row">
-                <span className="info-label">Registration No:</span>
-                <span className="info-val">{registered.redgNo}</span>
-              </div>
-            )}
-            {registered.rollNo && (
-              <div className="info-row">
-                <span className="info-label">Roll Number:</span>
-                <span className="info-val">{registered.rollNo}</span>
-              </div>
-            )}
             {registered.domain && (
               <div className="info-row">
                 <span className="info-label">Focus Sector:</span>
