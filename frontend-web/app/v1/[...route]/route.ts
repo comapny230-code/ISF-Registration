@@ -30,7 +30,7 @@ function hashPassword(password: string): string {
 function getTransporter() {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const user = process.env.SMTP_USER || "akshatrajpati@gmail.com";
-  const pass = (process.env.SMTP_PASS || "sndyvqfgfaohmmnh").replace(/\s+/g, "");
+  const pass = (process.env.SMTP_PASS || "yxgsiitfsxskjfpl").replace(/\s+/g, "");
   const port = Number(process.env.SMTP_PORT) || 465;
 
   if (host.includes("gmail") || user.includes("gmail")) {
@@ -62,7 +62,10 @@ function getSenderAddress(displayName = "ISF · Startup Jathara 2026") {
   return process.env.NOTIFY_EMAIL_FROM || `"${displayName}" <${user}>`;
 }
 
-const IMAGEKIT_PRIVATE_KEY = process.env.IMAGEKIT_PRIVATE_KEY || "private_JWDwiRxL0FA1c0KxsGs5pxy5ykg=";
+const IMAGEKIT_ID = process.env.IMAGEKIT_ID || "72ei8gyxi";
+const IMAGEKIT_URL_ENDPOINT = process.env.IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/72ei8gyxi";
+const IMAGEKIT_PUBLIC_KEY = process.env.IMAGEKIT_PUBLIC_KEY || "public_3oWGei3km522bT76QOi7Kvf2NMo=";
+const IMAGEKIT_PRIVATE_KEY = process.env.IMAGEKIT_PRIVATE_KEY || "private_yVxTwanRWZICeuQRSLBnimhzynU=";
 
 async function uploadToImageKit(fileData: string, fileName: string): Promise<string> {
   if (!fileData) return "";
