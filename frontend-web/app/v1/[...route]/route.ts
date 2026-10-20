@@ -270,9 +270,26 @@ async function ensureTables(sql: postgres.Sql) {
         photo_url text,
         phone text not null,
         email text not null,
-        created_at timestamptz not null default now()
-      );
       create index if not exists idx_student_team_members_leader on student_team_members(leader_user_id);
+
+      -- Ensure project details, report, aadhar, and pan columns exist
+      alter table user_accounts add column if not exists project_details text;
+      alter table user_accounts add column if not exists project_report_url text;
+      alter table user_accounts add column if not exists aadhar_number text;
+      alter table user_accounts add column if not exists pan_number text;
+
+      alter table startups add column if not exists project_details text;
+      alter table startups add column if not exists project_report_url text;
+
+      alter table startup_team_leaders add column if not exists project_details text;
+      alter table startup_team_leaders add column if not exists project_report_url text;
+      alter table startup_team_leaders add column if not exists aadhar_number text;
+      alter table startup_team_leaders add column if not exists pan_number text;
+
+      alter table student_innovators add column if not exists project_details text;
+      alter table student_innovators add column if not exists project_report_url text;
+      alter table student_innovators add column if not exists aadhar_number text;
+      alter table student_innovators add column if not exists pan_number text;
     `);
   } catch (err) {
     console.warn("[DB SCHEMA ENSURE]", err);
@@ -313,6 +330,12 @@ async function handleRequest(request: Request) {
       const rawAltMobile = String(body.altMobile || "").trim();
       const altMobile = normalizeMobileNumber(rawAltMobile) || rawAltMobile;
       const domain = String(body.domain || "").trim();
+      const projectDetails = String(body.projectDetails || body.projectDescription || "").trim();
+      const rawProjectReport = String(body.projectReport || body.projectReportUrl || "").trim();
+      const rawAadhar = String(body.aadharNumber || body.aadhar || "").trim().replace(/[\s-]/g, "");
+      const aadharNumber = rawAadhar ? rawAadhar : null;
+      const rawPan = String(body.panNumber || body.pan || "").trim().toUpperCase();
+      const panNumber = rawPan ? rawPan : null;
       const city = String(body.city || "").trim();
       const state = String(body.state || "").trim();
       const country = String(body.country || "India").trim();
@@ -363,6 +386,9 @@ async function handleRequest(request: Request) {
       if (!domain) {
         return Response.json({ message: "Focus Sector / Innovation Domain is required." }, { status: 400 });
       }
+      if (!projectDetails) {
+        return Response.json({ message: "Project / Venture details (~200 words) are required." }, { status: 400 });
+      }
       if (!city) {
         return Response.json({ message: "City is required." }, { status: 400 });
       }
@@ -403,6 +429,13 @@ async function handleRequest(request: Request) {
         }
       }
 
+      // Upload project report document to ImageKit if base64
+      let storedProjectReport: string | null = rawProjectReport || null;
+      if (rawProjectReport && !rawProjectReport.startsWith("http")) {
+        const cleanName = (teamName || fullName).replace(/[^a-zA-Z0-9]/g, "_") || "project";
+        storedProjectReport = await uploadToImageKit(rawProjectReport, `report_${Date.now()}_${cleanName}.pdf`);
+      }
+
       const role = "startup_team_leader";
       const passwordHash = password ? hashPassword(password) : null;
       const authSub = `dev|${email}`;
@@ -414,12 +447,14 @@ async function handleRequest(request: Request) {
         insert into user_accounts (
           auth_subject, email, full_name, mobile_e164, password_hash,
           status, category, team_name, team_members, team_members_json, photo_url,
-          domain, alt_mobile, city, state, country, linkedin_url
+          domain, project_details, project_report_url, aadhar_number, pan_number,
+          alt_mobile, city, state, country, linkedin_url
         )
         values (
           ${authSub}, ${email}, ${fullName}, ${mobile}, ${passwordHash},
           'active', ${category}, ${teamName}, ${teamMembersSummary}, ${JSON.stringify(members)}::jsonb, ${storedLeaderPhoto},
-          ${domain}, ${altMobile}, ${city}, ${state}, ${country}, ${linkedinUrl}
+          ${domain}, ${projectDetails || null}, ${storedProjectReport || null}, ${aadharNumber || null}, ${panNumber || null},
+          ${altMobile}, ${city}, ${state}, ${country}, ${linkedinUrl}
         )
         on conflict (lower(email)) where email is not null do update
         set auth_subject = ${authSub},
@@ -433,6 +468,10 @@ async function handleRequest(request: Request) {
             team_members_json = ${JSON.stringify(members)}::jsonb,
             photo_url = coalesce(${storedLeaderPhoto}, user_accounts.photo_url),
             domain = ${domain},
+            project_details = coalesce(${projectDetails || null}, user_accounts.project_details),
+            project_report_url = coalesce(${storedProjectReport || null}, user_accounts.project_report_url),
+            aadhar_number = coalesce(${aadharNumber || null}, user_accounts.aadhar_number),
+            pan_number = coalesce(${panNumber || null}, user_accounts.pan_number),
             alt_mobile = ${altMobile},
             city = ${city},
             state = ${state},
@@ -463,10 +502,17 @@ async function handleRequest(request: Request) {
       `;
       if (existingStartup) {
         startupId = existingStartup.id;
+        await sql`
+          update startups
+          set project_details = coalesce(${projectDetails || null}, startups.project_details),
+              project_report_url = coalesce(${storedProjectReport || null}, startups.project_report_url),
+              updated_at = now()
+          where id = ${startupId}
+        `;
       } else {
         const [newStartup] = await sql`
-          insert into startups (name, origin, created_by, city, state)
-          values (${teamName}, 'applicant', ${userId}, ${city}, ${state})
+          insert into startups (name, origin, created_by, city, state, project_details, project_report_url)
+          values (${teamName}, 'applicant', ${userId}, ${city}, ${state}, ${projectDetails || null}, ${storedProjectReport || null})
           returning id
         `;
         startupId = newStartup?.id || null;
@@ -485,12 +531,14 @@ async function handleRequest(request: Request) {
         await sql`
           insert into startup_team_leaders (
             user_id, startup_id, team_name, full_name, email,
-            mobile, alt_mobile, domain, city, state, country,
+            mobile, alt_mobile, domain, project_details, project_report_url,
+            aadhar_number, pan_number, city, state, country,
             linkedin_url, photo_url, edition_id
           )
           values (
             ${userId}, ${startupId}, ${teamName}, ${fullName}, ${email},
-            ${mobile}, ${altMobile}, ${domain}, ${city}, ${state}, ${country},
+            ${mobile}, ${altMobile}, ${domain}, ${projectDetails || null}, ${storedProjectReport || null},
+            ${aadharNumber || null}, ${panNumber || null}, ${city}, ${state}, ${country},
             ${linkedinUrl}, ${storedLeaderPhoto}, 2026
           )
           on conflict (user_id) do update set
@@ -501,6 +549,10 @@ async function handleRequest(request: Request) {
             mobile = ${mobile},
             alt_mobile = ${altMobile},
             domain = ${domain},
+            project_details = coalesce(${projectDetails || null}, startup_team_leaders.project_details),
+            project_report_url = coalesce(${storedProjectReport || null}, startup_team_leaders.project_report_url),
+            aadhar_number = coalesce(${aadharNumber || null}, startup_team_leaders.aadhar_number),
+            pan_number = coalesce(${panNumber || null}, startup_team_leaders.pan_number),
             city = ${city},
             state = ${state},
             country = ${country},
@@ -575,12 +627,14 @@ async function handleRequest(request: Request) {
         const [innovator] = await sql`
           insert into student_innovators (
             user_id, startup_id, team_name, full_name, email,
-            mobile, alt_mobile, domain, city, state, country,
+            mobile, alt_mobile, domain, project_details, project_report_url,
+            aadhar_number, pan_number, city, state, country,
             linkedin_url, photo_url, edition_id
           )
           values (
             ${userId}, ${startupId}, ${teamName}, ${fullName}, ${email},
-            ${mobile}, ${altMobile}, ${domain}, ${city}, ${state}, ${country},
+            ${mobile}, ${altMobile}, ${domain}, ${projectDetails || null}, ${storedProjectReport || null},
+            ${aadharNumber || null}, ${panNumber || null}, ${city}, ${state}, ${country},
             ${linkedinUrl}, ${storedLeaderPhoto}, 2026
           )
           on conflict (user_id) do update set
@@ -591,6 +645,10 @@ async function handleRequest(request: Request) {
             mobile = ${mobile},
             alt_mobile = ${altMobile},
             domain = ${domain},
+            project_details = coalesce(${projectDetails || null}, student_innovators.project_details),
+            project_report_url = coalesce(${storedProjectReport || null}, student_innovators.project_report_url),
+            aadhar_number = coalesce(${aadharNumber || null}, student_innovators.aadhar_number),
+            pan_number = coalesce(${panNumber || null}, student_innovators.pan_number),
             city = ${city},
             state = ${state},
             country = ${country},
@@ -748,6 +806,15 @@ async function handleRequest(request: Request) {
                   ${domain ? `<div style="margin-bottom:6px;"><strong>Domain / Sector:</strong> ${domain}</div>` : ""}
                   <div style="margin-bottom:6px;"><strong>Location:</strong> ${[city, state, country].filter(Boolean).join(", ")}</div>
                   ${linkedinUrl ? `<div style="margin-bottom:6px;"><strong>LinkedIn:</strong> <a href="${linkedinUrl}" target="_blank" style="color:#2563eb;text-decoration:none;">${linkedinUrl}</a></div>` : ""}
+                  ${aadharNumber ? `<div style="margin-bottom:6px;"><strong>Aadhaar Number:</strong> ${aadharNumber.replace(/(\d{4})(?=\d)/g, "$1 ")}</div>` : ""}
+                  ${panNumber ? `<div style="margin-bottom:6px;"><strong>PAN Number:</strong> ${panNumber}</div>` : ""}
+                  ${storedProjectReport ? `<div style="margin-bottom:6px;"><strong>Project Report Document:</strong> <a href="${storedProjectReport}" target="_blank" style="color:#2563eb;font-weight:600;text-decoration:underline;">View Uploaded Report Document ↗</a></div>` : ""}
+                  ${projectDetails ? `
+                    <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #cbd5e1;">
+                      <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">Project / Venture Summary:</div>
+                      <p style="margin:0;color:#475569;font-size:12.5px;line-height:1.6;white-space:pre-wrap;">${projectDetails}</p>
+                    </div>
+                  ` : ""}
                 </div>
 
                 ${membersListHtml}
@@ -779,6 +846,11 @@ async function handleRequest(request: Request) {
           category,
           teamName,
           photoUrl: storedLeaderPhoto,
+          domain,
+          projectDetails,
+          projectReportUrl: storedProjectReport,
+          aadharNumber,
+          panNumber,
           membersCount: members.length,
         },
         message: "Registration successful! Your application has been recorded in the summit database.",

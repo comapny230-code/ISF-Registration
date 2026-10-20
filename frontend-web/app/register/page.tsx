@@ -186,6 +186,11 @@ export default function RegisterPage() {
   const [state, setState] = useState("");
   const [country, setCountry] = useState("India");
   const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [projectDetails, setProjectDetails] = useState("");
+  const [projectReportUrl, setProjectReportUrl] = useState("");
+  const [projectReportFile, setProjectReportFile] = useState<{ name: string; dataUrl: string; size: string } | null>(null);
+  const [aadharNumber, setAadharNumber] = useState("");
+  const [panNumber, setPanNumber] = useState("");
 
   // Team members (1 to 5 members)
   const [members, setMembers] = useState<TeamMemberInput[]>([
@@ -210,6 +215,10 @@ export default function RegisterPage() {
     teamName: string;
     leadPhoto: string;
     domain?: string;
+    projectDetails?: string;
+    projectReportUrl?: string;
+    aadharNumber?: string;
+    panNumber?: string;
     linkedinUrl?: string;
     members: TeamMemberInput[];
   } | null>(null);
@@ -219,19 +228,63 @@ export default function RegisterPage() {
   const isStudentInnovator = category === "student_innovator";
   const isStartupOrInnovator = isStartupLeader || isStudentInnovator;
 
+  // Real-time word counter for ~200 words project details
+  const projectWordCount = useMemo(() => {
+    if (!projectDetails.trim()) return 0;
+    return projectDetails.trim().split(/\s+/).filter(Boolean).length;
+  }, [projectDetails]);
+
+  // Aadhaar formatter (XXXX XXXX XXXX)
+  function handleAadharChange(val: string) {
+    const digits = val.replace(/\D/g, "").slice(0, 12);
+    const formatted = digits.replace(/(\d{4})(?=\d)/g, "$1 ");
+    setAadharNumber(formatted);
+  }
+
+  // PAN formatter (ABCDE1234F)
+  function handlePanChange(val: string) {
+    const clean = val.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 10);
+    setPanNumber(clean);
+  }
+
+  // Project report file handler (PDF, DOCX, etc.)
+  const reportFileInputRef = useRef<HTMLInputElement>(null);
+  function handleReportFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setError("Project report document must be under 20 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+      setProjectReportFile({
+        name: file.name,
+        dataUrl: reader.result as string,
+        size: sizeMb,
+      });
+      setError(null);
+    };
+    reader.onerror = () => setError("Failed to read report file.");
+    reader.readAsDataURL(file);
+  }
+
   // Real-time completion progress calculation
   const progressPercent = useMemo(() => {
-    let score = 10;
+    let score = 5;
     if (category) score += 10;
-    if (teamName.trim()) score += 15;
-    if (fullName.trim()) score += 15;
-    if (email.trim() && email.includes("@")) score += 15;
+    if (teamName.trim()) score += 10;
+    if (fullName.trim()) score += 10;
+    if (projectDetails.trim()) score += 15;
+    if (email.trim() && email.includes("@")) score += 10;
     if (password.length >= 6) score += 10;
     if (mobile.trim()) score += 10;
-    if (leadPhoto) score += 15;
+    if (leadPhoto) score += 10;
+    if (projectReportFile || projectReportUrl) score += 10;
     if (members.length > 0 && members[0].name.trim()) score += 10;
     return Math.min(score, 100);
-  }, [category, teamName, fullName, email, password, mobile, leadPhoto, members]);
+  }, [category, teamName, fullName, projectDetails, email, password, mobile, leadPhoto, projectReportFile, projectReportUrl, members]);
 
   // Password Strength Calculator using Jathara palette
   const passwordStrength = useMemo(() => {
@@ -353,6 +406,24 @@ export default function RegisterPage() {
         handleFormError("Please select a Focus Sector / Innovation Domain.");
         return;
       }
+      if (!projectDetails.trim()) {
+        handleFormError("Please enter your Project / Venture details (~200 words).");
+        return;
+      }
+      if (aadharNumber.trim()) {
+        const cleanAadhar = aadharNumber.replace(/[\s-]/g, "");
+        if (cleanAadhar.length !== 12 || !/^\d{12}$/.test(cleanAadhar)) {
+          handleFormError("Please enter a valid 12-digit Aadhaar Card number (e.g. 1234 5678 9012) or leave blank.");
+          return;
+        }
+      }
+      if (panNumber.trim()) {
+        const cleanPan = panNumber.trim().toUpperCase();
+        if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
+          handleFormError("Please enter a valid 10-character PAN Card number (e.g. ABCDE1234F) or leave blank.");
+          return;
+        }
+      }
       if (!city.trim()) {
         handleFormError("Please enter your City.");
         return;
@@ -423,9 +494,11 @@ export default function RegisterPage() {
           organisationName: null,
           fullName: fullName.trim(),
           photoUrl: leadPhoto || null,
-          redgNo: null,
-          rollNo: null,
           domain: domain.trim(),
+          projectDetails: projectDetails.trim(),
+          projectReport: projectReportFile ? projectReportFile.dataUrl : (projectReportUrl.trim() || null),
+          aadharNumber: aadharNumber.trim() ? aadharNumber.replace(/[\s-]/g, "") : null,
+          panNumber: panNumber.trim() ? panNumber.trim().toUpperCase() : null,
           city: city.trim(),
           state: state.trim(),
           country: country.trim(),
@@ -455,6 +528,10 @@ export default function RegisterPage() {
         teamName: teamName.trim(),
         leadPhoto,
         domain: domain.trim(),
+        projectDetails: projectDetails.trim(),
+        projectReportUrl: data.user?.projectReportUrl || (projectReportFile ? projectReportFile.name : (projectReportUrl.trim() || undefined)),
+        aadharNumber: aadharNumber.trim() || undefined,
+        panNumber: panNumber.trim() ? panNumber.trim().toUpperCase() : undefined,
         linkedinUrl: finalLinkedin || undefined,
         members: formattedMembers,
       });
@@ -660,6 +737,42 @@ export default function RegisterPage() {
               <div className="info-row">
                 <span className="info-label">Focus Sector:</span>
                 <span className="info-val">{registered.domain}</span>
+              </div>
+            )}
+            {registered.aadharNumber && (
+              <div className="info-row">
+                <span className="info-label">Aadhaar Card:</span>
+                <span className="info-val">{registered.aadharNumber}</span>
+              </div>
+            )}
+            {registered.panNumber && (
+              <div className="info-row">
+                <span className="info-label">PAN Card:</span>
+                <span className="info-val">{registered.panNumber}</span>
+              </div>
+            )}
+            {registered.projectReportUrl && (
+              <div className="info-row">
+                <span className="info-label">Project Report:</span>
+                <span className="info-val">
+                  {registered.projectReportUrl.startsWith("http") ? (
+                    <a href={registered.projectReportUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#e87042", fontWeight: 700, textDecoration: "underline" }}>
+                      View Uploaded Document ↗
+                    </a>
+                  ) : (
+                    <span>{registered.projectReportUrl}</span>
+                  )}
+                </span>
+              </div>
+            )}
+            {registered.projectDetails && (
+              <div style={{ marginTop: 12, padding: "12px 14px", background: "#f5eee4", borderRadius: 10, textAlign: "left" }}>
+                <span className="info-label" style={{ display: "block", marginBottom: 4, fontWeight: 700 }}>
+                  Project / Venture Details:
+                </span>
+                <p style={{ margin: 0, fontSize: 13, color: "#44403c", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                  {registered.projectDetails}
+                </p>
               </div>
             )}
             <div className="info-row">
@@ -1686,11 +1799,120 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
+                {/* Subcard: Project Details & Report */}
+                <div className="form-panel-card">
+                  <div className="panel-heading">
+                    <span className="panel-badge">Project & Innovation Summary</span>
+                    <span className="panel-title">{isStudentInnovator ? "Prototype Details & Report" : "Venture Details & Deck"}</span>
+                  </div>
+
+                  <div className="form-grid-fields">
+                    <div className="form-group-item field-full-width">
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <label className="form-label-row" htmlFor="projectDetails" style={{ margin: 0 }}>
+                          <span>Project Details (~200 words) <span className="field-req-mark">*</span></span>
+                        </label>
+                        <span style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          background: projectWordCount >= 180 && projectWordCount <= 220 ? "#ecfdf5" : "#f5f5f4",
+                          color: projectWordCount >= 180 && projectWordCount <= 220 ? "#047857" : "#78716c",
+                          border: "1px solid #e7e5e4"
+                        }}>
+                          {projectWordCount} / ~200 words
+                        </span>
+                      </div>
+                      <textarea
+                        id="projectDetails"
+                        className="input-text-ctrl"
+                        rows={5}
+                        required
+                        placeholder={
+                          isStudentInnovator
+                            ? "Describe your project problem statement, technical innovation, working prototype status, lab/mentor affiliation, and potential real-world impact in around 200 words..."
+                            : "Describe your startup problem statement, proprietary solution, market traction, business model, and fundraising/growth goals in around 200 words..."
+                        }
+                        value={projectDetails}
+                        onChange={(e) => setProjectDetails(e.target.value)}
+                        style={{ resize: "vertical", minHeight: "120px", lineHeight: "1.5", fontSize: "13.5px" }}
+                      />
+                      <span style={{ fontSize: "11.5px", color: "#78716c", marginTop: "4px" }}>
+                        Provide a clear description of your innovation (~200 words) for the summit jury and investors.
+                      </span>
+                    </div>
+
+                    <div className="form-group-item field-full-width">
+                      <label className="form-label-row">
+                        <span>Project Report / Pitch Document</span>
+                      </label>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.ppt,.pptx,image/*"
+                        ref={reportFileInputRef}
+                        style={{ display: "none" }}
+                        onChange={handleReportFileChange}
+                      />
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => reportFileInputRef.current?.click()}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "9px 16px",
+                            background: "#faf7f2",
+                            border: "1.5px dashed #d6b25e",
+                            borderRadius: 10,
+                            color: "#1c1917",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.2s"
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                          </svg>
+                          {projectReportFile ? "Change Report Document" : "Upload Project Report / Deck (Max 20MB)"}
+                        </button>
+                        {projectReportFile && (
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#ecfdf5", border: "1px solid #a7f3d0", padding: "6px 12px", borderRadius: 8, fontSize: "12px", color: "#065f46" }}>
+                            <span>📄 {projectReportFile.name} ({projectReportFile.size})</span>
+                            <button
+                              type="button"
+                              onClick={() => setProjectReportFile(null)}
+                              style={{ background: "none", border: "none", color: "#b91c1c", fontWeight: 700, cursor: "pointer", padding: 0 }}
+                              title="Remove file"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        <input
+                          className="input-text-ctrl"
+                          type="url"
+                          placeholder="Or paste cloud document link (e.g. Google Drive, Notion, GitHub URL)"
+                          value={projectReportUrl}
+                          onChange={(e) => setProjectReportUrl(e.target.value)}
+                          style={{ fontSize: "12.5px" }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Subcard 2: Contact & Authentication Credentials */}
                 <div className="form-panel-card">
                   <div className="panel-heading">
-                    <span className="panel-badge">Contact & Account Credentials</span>
-                    <span className="panel-title">Credentials & communications</span>
+                    <span className="panel-badge">Contact & Identification</span>
+                    <span className="panel-title">Credentials & identity verification</span>
                   </div>
 
                   <div className="form-grid-fields">
@@ -1880,6 +2102,47 @@ export default function RegisterPage() {
                       </div>
                       <span style={{ fontSize: "11px", color: "#78716c", marginTop: "2px" }}>
                         Accepts LinkedIn username, handle, or full URL
+                      </span>
+                    </div>
+
+                    <div className="form-group-item">
+                      <label className="form-label-row" htmlFor="aadharNumber">
+                        <span>Aadhaar Number</span>
+                      </label>
+                      <div className="input-icon-wrapper">
+                        <input
+                          id="aadharNumber"
+                          className="input-text-ctrl"
+                          type="text"
+                          maxLength={14}
+                          placeholder="1234 5678 9012"
+                          value={aadharNumber}
+                          onChange={(e) => handleAadharChange(e.target.value)}
+                        />
+                      </div>
+                      <span style={{ fontSize: "11px", color: "#78716c", marginTop: "2px" }}>
+                        12-digit Indian Aadhaar for accreditation
+                      </span>
+                    </div>
+
+                    <div className="form-group-item">
+                      <label className="form-label-row" htmlFor="panNumber">
+                        <span>PAN Card Number</span>
+                      </label>
+                      <div className="input-icon-wrapper">
+                        <input
+                          id="panNumber"
+                          className="input-text-ctrl"
+                          type="text"
+                          maxLength={10}
+                          placeholder="ABCDE1234F"
+                          value={panNumber}
+                          onChange={(e) => handlePanChange(e.target.value)}
+                          style={{ textTransform: "uppercase" }}
+                        />
+                      </div>
+                      <span style={{ fontSize: "11px", color: "#78716c", marginTop: "2px" }}>
+                        10-character Permanent Account Number
                       </span>
                     </div>
                   </div>
