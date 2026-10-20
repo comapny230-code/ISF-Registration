@@ -1,0 +1,11 @@
+{
+  "name": "isf-registration",
+  "private": true,
+  "version": "0.1.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "npm run dev --prefix frontend-web",
+    "build": "npm run build --prefix frontend-web",
+    "start": "npm run start --prefix frontend-web"
+  }
+}

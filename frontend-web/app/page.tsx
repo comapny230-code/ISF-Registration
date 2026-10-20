@@ -1,0 +1,40 @@
+import Link from "next/link";
+import Image from "next/image";
+
+export default function Home() {
+  return (
+    <section className="hero">
+      <div className="hero-emblem">
+        <Image src="/logos/udbhav.png" alt="ISF" width={80} height={80} style={{ borderRadius: 12, objectFit: "contain" }} priority />
+      </div>
+
+      <span className="eyebrow-badge">GIET University · Gunupur, Odisha</span>
+
+      <h1>ISF · Startup Jathara</h1>
+
+      <div className="pills-row">
+        <span className="pill-item">18–20 December 2026 (Pre-event 17 Dec)</span>
+        <span className="pill-item">GIET University, Gunupur</span>
+        <span className="pill-item">ISF & Incubatex Innovation</span>
+      </div>
+
+      <p className="lede">
+        The premier Dandakaranya Innovation Summit bringing together startup leaders and student innovators for pitch stages, roundtables, and ecosystem growth.
+      </p>
+
+      <div className="actions">
+        <Link href="/register" className="btn btn-primary btn-large">
+          Summit Registration →
+        </Link>
+      </div>
+
+      <div className="tracks-ribbon">
+        <p className="tracks-ribbon-title">Open Registration Tracks</p>
+        <div className="tracks-badges">
+          <span className="track-chip">Startup Leaders</span>
+          <span className="track-chip">Student Innovators</span>
+        </div>
+      </div>
+    </section>
+  );
+}
