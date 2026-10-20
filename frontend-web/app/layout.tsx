@@ -34,24 +34,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
             </div>
 
-            <nav className="header-nav" aria-label="Main Navigation">
-              <a href="https://jathara.netlify.app/about" target="_blank" rel="noopener noreferrer" className="nav-link">
-                About
-              </a>
-              <a href="https://jathara.netlify.app/programme" target="_blank" rel="noopener noreferrer" className="nav-link">
-                Programme
-              </a>
-              <a href="https://jathara.netlify.app/startups" target="_blank" rel="noopener noreferrer" className="nav-link">
-                Startups & Junicorn
-              </a>
-              <a href="https://jathara.netlify.app/speakers" target="_blank" rel="noopener noreferrer" className="nav-link">
-                Speakers
-              </a>
-              <a href="https://jathara.netlify.app/venue" target="_blank" rel="noopener noreferrer" className="nav-link">
-                Venue & Travel
-              </a>
-            </nav>
-
             <div className="header-right">
               <Link href="/register" className="nav-btn-register">
                 <span>Register</span>

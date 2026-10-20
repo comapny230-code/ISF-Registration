@@ -1013,8 +1013,8 @@ export default function RegisterPage() {
         /* STEP 1: Track Cards (Exact Netlify Sector Card style) */
         .tracks-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 18px;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 20px;
           margin-bottom: 24px;
         }
         .track-card {
@@ -1227,7 +1227,7 @@ export default function RegisterPage() {
         /* Inputs & Form Groups (Clean minimal styling) */
         .form-grid-fields {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          grid-template-columns: repeat(2, 1fr);
           gap: 16px;
         }
         .field-full-width {
@@ -1611,6 +1611,14 @@ export default function RegisterPage() {
             grid-template-columns: 1fr;
           }
         }
+        @media (max-width: 640px) {
+          .form-grid-fields {
+            grid-template-columns: 1fr;
+          }
+          .portal-card-main {
+            padding: 24px 16px;
+          }
+        }
       `}</style>
 
       {/* Hero Header Section */}
@@ -1776,7 +1784,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    <div className="form-group-item">
+                    <div className="form-group-item field-full-width">
                         <label className="form-label-row" htmlFor="domain">
                           <span>Focus Sector / Innovation Domain <span className="field-req-mark">*</span></span>
                         </label>
@@ -2076,7 +2084,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    <div className="form-group-item field-full-width">
+                    <div className="form-group-item">
                       <label className="form-label-row" htmlFor="linkedinUrl">
                         <span>LinkedIn Profile / URL {isStartupOrInnovator && <span className="field-req-mark">*</span>}</span>
                       </label>
