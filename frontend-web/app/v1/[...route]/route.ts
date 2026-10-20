@@ -6,12 +6,12 @@ export const dynamic = "force-dynamic";
 
 const DB_URL =
   process.env.DATABASE_URL ||
-  "postgresql://postgres.ddrremsyzozutyxbxigf:n0fE3G5tjwyXTt5C@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require";
+  "postgresql://postgres.ddrremsyzozutyxbxigf:n0fE3G5tjwyXTt5C@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require";
 
 // Auto-converts IPv6-only direct Supabase host to IPv4 connection pooler
 function resolveDatabaseUrl(rawUrl: string): string {
   if (!rawUrl) return rawUrl;
-  const urlStr = rawUrl.trim();
+  let urlStr = rawUrl.trim();
 
   // Pattern: db.<project-ref>.supabase.co (IPv6 direct) -> aws-0-<region>.pooler.supabase.com:6543 (IPv4 pooler)
   const directMatch = urlStr.match(
@@ -20,12 +20,23 @@ function resolveDatabaseUrl(rawUrl: string): string {
 
   if (directMatch) {
     const [, protocol, username, password, projectRef, pathname = "/postgres", query = ""] = directMatch;
-    const region = process.env.SUPABASE_REGION || "ap-south-1";
+    // Project ddrremsyzozutyxbxigf is verified in ap-southeast-1 (Singapore)
+    const region = process.env.SUPABASE_REGION || "ap-southeast-1";
     const poolerUser = username.includes(".") ? username : `${username}.${projectRef}`;
     const poolerHost = `aws-0-${region}.pooler.supabase.com:6543`;
     const pwdPart = password !== undefined ? `:${password}` : "";
     const cleanQuery = query.includes("sslmode=") ? query : (query ? `${query}&sslmode=require` : "?sslmode=require");
     return `${protocol}${poolerUser}${pwdPart}@${poolerHost}${pathname || "/postgres"}${cleanQuery}`;
+  }
+
+  // If user pasted ap-south-1 for ddrremsyzozutyxbxigf, auto-correct to ap-southeast-1
+  if (urlStr.includes("ddrremsyzozutyxbxigf") && urlStr.includes("aws-0-ap-south-1")) {
+    urlStr = urlStr.replace("aws-0-ap-south-1", "aws-0-ap-southeast-1");
+  }
+
+  // Ensure connection pooler has sslmode=require
+  if (urlStr.includes("pooler.supabase.com") && !urlStr.includes("sslmode=")) {
+    urlStr += (urlStr.includes("?") ? "&" : "?") + "sslmode=require";
   }
 
   return urlStr;
@@ -884,16 +895,22 @@ async function handleRequest(request: Request) {
       });
     } catch (err: any) {
       console.error("[REGISTRATION ERROR]", err);
-      let message = err?.message || "Registration failed due to a server error.";
-      if (message.includes("ENOTFOUND") || message.includes("db.") || message.includes("supabase.co")) {
+      const rawMessage = String(err?.message || err || "Registration failed due to a server error.");
+      let message = rawMessage;
+
+      if (rawMessage.includes("ENOTFOUND") && rawMessage.includes("db.")) {
         message =
-          "Database connection error: Could not reach Supabase. Direct hostnames (IPv6) fail in serverless. Please ensure your Vercel DATABASE_URL uses the Supabase Connection Pooler URI (IPv4): postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require";
-      } else if (message.includes("password authentication failed")) {
+          "Database connection error: Direct Supabase hostname (IPv6) cannot be reached in serverless. Please set DATABASE_URL in Vercel to: postgresql://postgres.ddrremsyzozutyxbxigf:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres?sslmode=require";
+      } else if (rawMessage.includes("password authentication failed")) {
         message =
-          "Database password error: Invalid password in DATABASE_URL. Please verify your Supabase database password in Vercel.";
+          "Database password incorrect: Please verify your Supabase database password in Vercel's DATABASE_URL.";
+      } else if (rawMessage.includes("tenant") && rawMessage.includes("not found")) {
+        message =
+          "Database pooler error: Tenant not found in that region. Please set DATABASE_URL to use aws-0-ap-southeast-1.pooler.supabase.com:6543.";
       }
+
       return Response.json(
-        { message, detail: message },
+        { message, detail: rawMessage },
         { status: 500 }
       );
     }
