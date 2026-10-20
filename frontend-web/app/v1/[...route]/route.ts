@@ -6,16 +6,41 @@ export const dynamic = "force-dynamic";
 
 const DB_URL =
   process.env.DATABASE_URL ||
-  "postgresql://postgres.wdeslbtyyeqpjdgnaieg:n0fE3G5tjwyXTt5C@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require";
+  "postgresql://postgres.ddrremsyzozutyxbxigf:n0fE3G5tjwyXTt5C@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require";
+
+// Auto-converts IPv6-only direct Supabase host to IPv4 connection pooler
+function resolveDatabaseUrl(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+  const urlStr = rawUrl.trim();
+
+  // Pattern: db.<project-ref>.supabase.co (IPv6 direct) -> aws-0-<region>.pooler.supabase.com:6543 (IPv4 pooler)
+  const directMatch = urlStr.match(
+    /^(postgres(?:ql)?:\/\/)([^:@/]+)(?::([^@/]*))?@db\.([a-z0-9]+)\.supabase\.co(?::\d+)?(\/[^?]*)?(.*)$/i
+  );
+
+  if (directMatch) {
+    const [, protocol, username, password, projectRef, pathname = "/postgres", query = ""] = directMatch;
+    const region = process.env.SUPABASE_REGION || "ap-south-1";
+    const poolerUser = username.includes(".") ? username : `${username}.${projectRef}`;
+    const poolerHost = `aws-0-${region}.pooler.supabase.com:6543`;
+    const pwdPart = password !== undefined ? `:${password}` : "";
+    const cleanQuery = query.includes("sslmode=") ? query : (query ? `${query}&sslmode=require` : "?sslmode=require");
+    return `${protocol}${poolerUser}${pwdPart}@${poolerHost}${pathname || "/postgres"}${cleanQuery}`;
+  }
+
+  return urlStr;
+}
 
 let sqlInstance: postgres.Sql | null = null;
 function getSql() {
   if (!sqlInstance) {
-    sqlInstance = postgres(DB_URL, {
+    const resolvedUrl = resolveDatabaseUrl(DB_URL);
+    sqlInstance = postgres(resolvedUrl, {
       ssl: { rejectUnauthorized: false },
+      prepare: false, // Essential for Supabase Connection Pooler / PgBouncer transaction mode
       max: 5,
       idle_timeout: 10,
-      connect_timeout: 10,
+      connect_timeout: 15,
     });
   }
   return sqlInstance;
@@ -270,6 +295,8 @@ async function ensureTables(sql: postgres.Sql) {
         photo_url text,
         phone text not null,
         email text not null,
+        created_at timestamptz not null default now()
+      );
       create index if not exists idx_student_team_members_leader on student_team_members(leader_user_id);
 
       -- Ensure project details, report, aadhar, and pan columns exist
@@ -314,10 +341,10 @@ async function handleRequest(request: Request) {
 
   // POST /v1/auth/register or /v1/public/signup
   if ((path.includes("/auth/register") || path.includes("/public/signup")) && method === "POST") {
-    const sql = getSql();
-    await ensureTables(sql);
-
     try {
+      const sql = getSql();
+      await ensureTables(sql);
+
       const body = await request.json();
       const email = String(body.email || "").toLowerCase().trim();
       const fullName = String(body.fullName || "").trim();
@@ -857,8 +884,16 @@ async function handleRequest(request: Request) {
       });
     } catch (err: any) {
       console.error("[REGISTRATION ERROR]", err);
+      let message = err?.message || "Registration failed due to a server error.";
+      if (message.includes("ENOTFOUND") || message.includes("db.") || message.includes("supabase.co")) {
+        message =
+          "Database connection error: Could not reach Supabase. Direct hostnames (IPv6) fail in serverless. Please ensure your Vercel DATABASE_URL uses the Supabase Connection Pooler URI (IPv4): postgresql://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require";
+      } else if (message.includes("password authentication failed")) {
+        message =
+          "Database password error: Invalid password in DATABASE_URL. Please verify your Supabase database password in Vercel.";
+      }
       return Response.json(
-        { message: err?.message || "Registration failed due to a server error." },
+        { message, detail: message },
         { status: 500 }
       );
     }
