@@ -58,9 +58,21 @@
   background: var(--bg);
   line-height: 1.55;
 }
-* { box-sizing: border-box; }
+*, *::before, *::after {
+  box-sizing: border-box;
+}
 html, body {
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+input, select, textarea, button {
+  max-width: 100%;
 }
 body {
   margin: 0;
@@ -200,6 +212,29 @@ p { margin: 0 0 1em; }
 }
 .nav-btn-register:hover .btn-arrow {
   transform: translateX(2px);
+}
+
+@media (max-width: 520px) {
+  .header-container {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .brand-logo-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+  }
+  .brand-title {
+    font-size: 12px;
+  }
+  .brand-sub {
+    font-size: 8.5px;
+  }
+  .nav-btn-register {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 9px;
+  }
 }
 
 main.main-content-wrap {
@@ -449,6 +484,20 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 20px;
+}
+@media (max-width: 600px) {
+  .organizers-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .organizer-card {
+    padding: 12px;
+    gap: 12px;
+  }
+  .organizers-section {
+    padding: 20px 14px;
+    margin: 20px 0;
+  }
 }
 
 .organizer-card {

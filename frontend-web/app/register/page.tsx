@@ -671,6 +671,11 @@ export default function RegisterPage() {
             padding: 9px 10px;
             border-top: 1px solid #e8dfd3;
           }
+          .members-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
           .btn-login-cta {
             background: linear-gradient(135deg, #e87042 0%, #c25022 100%);
             color: #ffffff;
@@ -691,6 +696,29 @@ export default function RegisterPage() {
           .btn-login-cta:hover {
             transform: translateY(-2px);
             box-shadow: 0 14px 30px -4px rgba(232, 112, 66, 0.5);
+          }
+          @media (max-width: 640px) {
+            .confirmed-view-wrap {
+              padding: 0 10px;
+              margin: 16px auto 30px;
+            }
+            .success-badge-card {
+              padding: 24px 14px;
+              border-radius: 20px;
+            }
+            .info-table-box {
+              padding: 14px 12px;
+              border-radius: 14px;
+            }
+            .info-row {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 4px;
+              padding: 8px 0;
+            }
+            .info-val {
+              word-break: break-word;
+            }
           }
         `}</style>
 
@@ -789,38 +817,40 @@ export default function RegisterPage() {
                 <span className="info-label" style={{ fontWeight: 700, color: "#1c1917", display: "block", marginBottom: 6 }}>
                   Accredited Team Members ({registered.members.length} / 5):
                 </span>
-                <table className="members-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Photo</th>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Phone</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {registered.members.map((m, idx) => (
-                      <tr key={m.id || idx}>
-                        <td>{idx + 1}</td>
-                        <td>
-                          {m.photoUrl ? (
-                            <img
-                              src={m.photoUrl}
-                              alt={m.name}
-                              style={{ width: 30, height: 30, borderRadius: 6, objectFit: "cover" }}
-                            />
-                          ) : (
-                            <span style={{ fontSize: 10, color: "#a8a29e", fontWeight: 600 }}>N/A</span>
-                          )}
-                        </td>
-                        <td style={{ fontWeight: 600 }}>{m.name}</td>
-                        <td style={{ color: "#e87042" }}>{m.email}</td>
-                        <td>{m.phone}</td>
+                <div className="members-table-wrap">
+                  <table className="members-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Photo</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {registered.members.map((m, idx) => (
+                        <tr key={m.id || idx}>
+                          <td>{idx + 1}</td>
+                          <td>
+                            {m.photoUrl ? (
+                              <img
+                                src={m.photoUrl}
+                                alt={m.name}
+                                style={{ width: 30, height: 30, borderRadius: 6, objectFit: "cover" }}
+                              />
+                            ) : (
+                              <span style={{ fontSize: 10, color: "#a8a29e", fontWeight: 600 }}>N/A</span>
+                            )}
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{m.name}</td>
+                          <td style={{ color: "#e87042" }}>{m.email}</td>
+                          <td>{m.phone}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -1598,25 +1628,113 @@ export default function RegisterPage() {
           cursor: not-allowed;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1040px) {
           .form-and-badge-grid {
             grid-template-columns: 1fr;
+            gap: 24px;
+          }
+          .badge-preview-column {
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto 24px;
           }
           .live-badge-container {
             position: static;
             max-width: 320px;
-            margin: 0 auto 24px;
+            width: 100%;
+            margin: 0 auto;
           }
-          .tracks-grid, .perks-strip-matrix {
+          .perks-strip-matrix {
             grid-template-columns: 1fr;
+            gap: 10px;
           }
         }
-        @media (max-width: 640px) {
+
+        @media (max-width: 768px) {
+          .tracks-grid {
+            grid-template-columns: 1fr;
+            gap: 14px;
+          }
           .form-grid-fields {
             grid-template-columns: 1fr;
+            gap: 14px;
+          }
+          .summit-hero-banner {
+            padding: 32px 14px 20px;
+          }
+          .hero-h1 {
+            font-size: clamp(24px, 5.5vw, 34px);
+          }
+          .hero-tagline {
+            font-size: 16px;
+          }
+          .hero-lead {
+            font-size: 13px;
+          }
+          .portal-form-container {
+            padding: 0 12px;
+            margin: 14px auto 36px;
           }
           .portal-card-main {
             padding: 24px 16px;
+            border-radius: 20px;
+          }
+          .form-panel-card {
+            padding: 18px 14px;
+            border-radius: 16px;
+          }
+          .progress-box {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+            padding: 12px 16px;
+          }
+          .step-heading-bar {
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .step-heading-title {
+            font-size: 16px;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .portal-form-container {
+            padding: 0 8px;
+            margin: 10px auto 30px;
+          }
+          .portal-card-main {
+            padding: 18px 12px;
+            border-radius: 16px;
+          }
+          .form-panel-card {
+            padding: 14px 10px;
+            border-radius: 14px;
+          }
+          .track-card {
+            padding: 18px 14px;
+            border-radius: 18px;
+          }
+          .member-row-layout {
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+          }
+          .member-photo-pick {
+            width: 100%;
+          }
+          .member-inputs-flex {
+            width: 100%;
+            grid-template-columns: 1fr;
+          }
+          .trust-seal-box {
+            flex-direction: column;
+            text-align: center;
+            padding: 12px;
+          }
+          .btn-submit-summit {
+            padding: 14px 18px;
+            font-size: 14.5px;
           }
         }
       `}</style>
