@@ -178,7 +178,6 @@ export default function RegisterPage() {
   const [leadPhoto, setLeadPhoto] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [mobile, setMobile] = useState("");
   const [altMobile, setAltMobile] = useState("");
   const [domain, setDomain] = useState("Agritech & Food Safety");
@@ -278,27 +277,14 @@ export default function RegisterPage() {
     if (fullName.trim()) score += 10;
     if (projectDetails.trim()) score += 15;
     if (email.trim() && email.includes("@")) score += 10;
-    if (password.length >= 6) score += 10;
     if (mobile.trim()) score += 10;
     if (leadPhoto) score += 10;
+    if (aadharNumber.trim().replace(/[\s-]/g, "").length === 12) score += 10;
     if (projectReportFile || projectReportUrl) score += 10;
     if (members.length > 0 && members[0].name.trim()) score += 10;
     return Math.min(score, 100);
-  }, [category, teamName, fullName, projectDetails, email, password, mobile, leadPhoto, projectReportFile, projectReportUrl, members]);
+  }, [category, teamName, fullName, projectDetails, email, mobile, leadPhoto, aadharNumber, projectReportFile, projectReportUrl, members]);
 
-  // Password Strength Calculator using Jathara palette
-  const passwordStrength = useMemo(() => {
-    if (!password) return { level: 0, label: "Enter password (min 6 chars)", color: "#78716c" };
-    let points = 0;
-    if (password.length >= 6) points += 1;
-    if (password.length >= 8) points += 1;
-    if (/[0-9]/.test(password)) points += 1;
-    if (/[^A-Za-z0-9]/.test(password)) points += 1;
-    if (points <= 1) return { level: 1, label: "Weak (add numbers/symbols)", color: "#c25022" };
-    if (points === 2) return { level: 2, label: "Fair (acceptable)", color: "#d6b25e" };
-    if (points === 3) return { level: 3, label: "Good security", color: "#256f57" };
-    return { level: 4, label: "Strong & Accredited", color: "#143e30" };
-  }, [password]);
 
   // Lead photo upload handler
   const leadFileInputRef = useRef<HTMLInputElement>(null);
@@ -373,10 +359,6 @@ export default function RegisterPage() {
       handleFormError("Please enter your full name.");
       return;
     }
-    if (!password || password.length < 6) {
-      handleFormError("Please enter an account password of at least 6 characters.");
-      return;
-    }
 
     if (isStartupOrInnovator) {
       if (!teamName.trim()) {
@@ -410,12 +392,14 @@ export default function RegisterPage() {
         handleFormError("Please enter your Project / Venture details (~200 words).");
         return;
       }
-      if (aadharNumber.trim()) {
-        const cleanAadhar = aadharNumber.replace(/[\s-]/g, "");
-        if (cleanAadhar.length !== 12 || !/^\d{12}$/.test(cleanAadhar)) {
-          handleFormError("Please enter a valid 12-digit Aadhaar Card number (e.g. 1234 5678 9012) or leave blank.");
-          return;
-        }
+      if (!aadharNumber.trim()) {
+        handleFormError("Please enter your 12-digit Aadhaar Card number.");
+        return;
+      }
+      const cleanAadhar = aadharNumber.replace(/[\s-]/g, "");
+      if (cleanAadhar.length !== 12 || !/^\d{12}$/.test(cleanAadhar)) {
+        handleFormError("Please enter a valid 12-digit Aadhaar Card number (e.g. 1234 5678 9012).");
+        return;
       }
       if (panNumber.trim()) {
         const cleanPan = panNumber.trim().toUpperCase();
@@ -2059,49 +2043,6 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    <div className="form-group-item">
-                      <label className="form-label-row" htmlFor="password">
-                        <span>Create Account Password <span className="field-req-mark">*</span></span>
-                      </label>
-                      <div className="input-icon-wrapper">
-                        <input
-                          id="password"
-                          className="input-text-ctrl"
-                          type={showPassword ? "text" : "password"}
-                          required
-                          placeholder="Min 6 chars"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="btn-pwd-peek"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? "Hide" : "Show"}
-                        </button>
-                      </div>
-
-                      {/* Interactive Password Strength Meter with Jathara colors */}
-                      {password && (
-                        <div className="strength-meter-row">
-                          <div className="strength-bars-track">
-                            {[1, 2, 3, 4].map((i) => (
-                              <div
-                                key={i}
-                                className="strength-bar-unit"
-                                style={{
-                                  background: i <= passwordStrength.level ? passwordStrength.color : "#ede7db",
-                                }}
-                              />
-                            ))}
-                          </div>
-                          <span className="strength-feedback-text" style={{ color: passwordStrength.color }}>
-                            {passwordStrength.label}
-                          </span>
-                        </div>
-                      )}
-                    </div>
 
                     <div className="form-group-item">
                       <label className="form-label-row" htmlFor="mobile">
@@ -2233,13 +2174,14 @@ export default function RegisterPage() {
 
                     <div className="form-group-item">
                       <label className="form-label-row" htmlFor="aadharNumber">
-                        <span>Aadhaar Number</span>
+                        <span>Aadhaar Number <span className="field-req-mark">*</span></span>
                       </label>
                       <div className="input-icon-wrapper">
                         <input
                           id="aadharNumber"
                           className="input-text-ctrl"
                           type="text"
+                          required
                           maxLength={14}
                           placeholder="1234 5678 9012"
                           value={aadharNumber}

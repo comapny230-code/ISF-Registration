@@ -439,6 +439,9 @@ async function handleRequest(request: Request) {
       if (!linkedinUrl) {
         return Response.json({ message: "LinkedIn profile URL is required." }, { status: 400 });
       }
+      if (!aadharNumber || aadharNumber.length !== 12 || !/^\d{12}$/.test(aadharNumber)) {
+        return Response.json({ message: "A valid 12-digit Aadhaar Card number is required." }, { status: 400 });
+      }
       if (members.length === 0) {
         return Response.json({ message: "At least one team member detail is required (max 5 members)." }, { status: 400 });
       }
