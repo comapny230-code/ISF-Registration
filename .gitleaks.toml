@@ -1,0 +1,41 @@
+title = "ISF Registration secret scanning"
+
+# The default ruleset did not detect any of the three credential types that were
+# committed to this repository (verified against the pre-remediation tree), so
+# project-specific rules are added below.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "postgres-url-inline-password"
+description = "PostgreSQL connection URL with an inline password"
+regex = '''postgres(?:ql)?://[^:\s'"`/@]+:([^@\s'"`<\[\]]{6,})@[^\s'"`]+'''
+secretGroup = 1
+keywords = ["postgres"]
+
+[[rules]]
+id = "imagekit-private-key"
+description = "ImageKit private API key"
+regex = '''\b(private_[A-Za-z0-9+/=]{20,})'''
+secretGroup = 1
+keywords = ["private_"]
+
+[[rules]]
+id = "smtp-app-password"
+description = "SMTP / Gmail app password assigned or used as a fallback"
+regex = '''(?i)(?:smtp_pass|app[_ -]?password)[^\n]{0,20}?["'=:\s]+([a-z]{4}\s?[a-z]{4}\s?[a-z]{4}\s?[a-z]{4})\b'''
+secretGroup = 1
+keywords = ["smtp_pass", "password"]
+
+[allowlist]
+description = "Non-secret, test-only values"
+regexTarget = "match"
+paths = [
+  '''frontend-web/package-lock\.json''',
+]
+regexes = [
+  # Disposable local test cluster credentials (scripts/test-db.mjs); localhost only.
+  '''postgresql://isf_test:isf_test@localhost''',
+]
+# Do not allowlist by host: the leaked production URL used the shared pooler host.
+# Test fixtures use passwords shorter than the rule's 6-character minimum instead.

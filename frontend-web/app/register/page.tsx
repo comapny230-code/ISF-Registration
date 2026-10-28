@@ -501,7 +501,8 @@ export default function RegisterPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        const errorMsg = data.detail || data.message || "Registration failed. Please verify your details.";
+        const baseMsg = data.message || "Registration failed. Please verify your details.";
+        const errorMsg = data.requestId ? `${baseMsg} (Ref: ${data.requestId})` : baseMsg;
         handleFormError(errorMsg);
         setBusy(false);
         return;
