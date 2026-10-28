@@ -78,12 +78,15 @@ body {
   margin: 0;
   display: flex;
   flex-direction: column;
+  /* Keep the registration backdrop clean and uniform. The old photographic
+     texture contained visible brown marks that looked like stains. */
   background-color: #f7f9fa;
-  background-image: url("/bg.png");
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(232, 112, 66, 0.035), transparent 28rem),
+    radial-gradient(circle at 88% 18%, rgba(20, 62, 48, 0.025), transparent 30rem),
+    linear-gradient(180deg, #f7f9fa 0%, #f6f8f8 52%, #fcfbf8 100%);
   background-repeat: no-repeat;
-  background-position: center top;
-  background-size: cover;
-  background-attachment: fixed;
+  background-size: 100% 100%;
   color: var(--ink);
   font-family: var(--font-sans);
 }
