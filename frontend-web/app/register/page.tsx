@@ -640,6 +640,40 @@ export default function RegisterPage() {
             color: #1c1917;
             font-weight: 700;
           }
+          .printing-material-card {
+            background: #f2f7f4;
+            border: 1px solid #c6dbd2;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            text-align: left;
+          }
+          .printing-material-title {
+            color: #143e30;
+            font-size: 14.5px;
+            font-weight: 800;
+            margin-bottom: 8px;
+          }
+          .printing-material-name {
+            color: #1c1917;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+          }
+          .printing-material-link {
+            color: #256f57;
+            font-size: 13.5px;
+            font-weight: 600;
+            text-decoration: none;
+          }
+          .printing-material-link:hover {
+            text-decoration: underline;
+          }
+          .printing-material-phones {
+            color: #57534e;
+            font-size: 13.5px;
+            margin-top: 3px;
+          }
           .members-table {
             width: 100%;
             border-collapse: collapse;
@@ -853,6 +887,19 @@ export default function RegisterPage() {
             <p style={{ margin: 0, fontSize: 13.5, color: "#57534e", lineHeight: 1.5 }}>
               Your registration details have been saved. You will be contacted by the ISF team with further details about your summit pass and schedule.
             </p>
+          </div>
+
+          <div className="printing-material-card">
+            <div className="printing-material-title">Printing Material</div>
+            <div className="printing-material-name">Mr. Rajendra Kumar Patro</div>
+            <a className="printing-material-link" href="mailto:rajurajpatro@gmail.com">
+              rajurajpatro@gmail.com
+            </a>
+            <div className="printing-material-phones">
+              <a className="printing-material-link" href="tel:+919438765251">+91 94387 65251</a>
+              <span> · </span>
+              <a className="printing-material-link" href="tel:+917735745518">+91 77357 45518</a>
+            </div>
           </div>
         </div>
       </div>
