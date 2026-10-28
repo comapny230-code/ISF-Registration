@@ -8,6 +8,7 @@ type CategoryId =
 interface CategoryMeta {
   id: CategoryId;
   title: string;
+  ageRange: string;
   badge: string;
   trackCode: string;
   desc: string;
@@ -24,17 +25,18 @@ interface CategoryMeta {
 const CATEGORIES: CategoryMeta[] = [
   {
     id: "startup_founder",
-    title: "Startup Leader",
-    badge: "Startup Founders & Co-Founders",
+    title: "Senior Track",
+    ageRange: "Age 18–25 years",
+    badge: "College Students · Startups · MSMEs · UG/PG · Professionals",
     trackCode: "Track 01",
-    desc: "Founders & startups with market-ready products, MVPs, or high-growth ventures seeking seed funding, angel roundtables & GCC connects.",
+    desc: "College students, startup founders, MSMEs, UG/PG innovators, and professionals building ventures, products, or impactful innovations.",
     teamLabel: "Startup / Company Name",
     themeColor: "#e87042",
     gradient: "linear-gradient(135deg, #c25022 0%, #e87042 50%, #d68c45 100%)",
     accentBg: "linear-gradient(135deg, rgba(232, 112, 66, 0.08) 0%, rgba(214, 140, 69, 0.04) 100%)",
     borderColor: "#e87042",
-    tag: "₹1 Cr+ Pitch Stage · VC Speed Dating",
-    passType: "FOUNDER · VIP ALL-ACCESS",
+    tag: "Pitch Stage · VC & Industry Connect",
+    passType: "SENIOR · ALL-ACCESS",
     perks: [
       {
         title: "₹1 Cr+ Pitch & Seed Arena",
@@ -52,17 +54,18 @@ const CATEGORIES: CategoryMeta[] = [
   },
   {
     id: "student_innovator",
-    title: "Student Innovator",
-    badge: "Student Innovators & College Labs",
+    title: "Junior Track",
+    ageRange: "Age 8–17 years",
+    badge: "School Students",
     trackCode: "Track 02",
-    desc: "Undergraduates, researchers & college teams showcasing working hardware/software tech prototypes, robotics, or scientific innovations.",
+    desc: "School students showcasing creative ideas, science projects, working prototypes, or early-stage innovations.",
     teamLabel: "Project / Team Name",
     themeColor: "#143e30",
     gradient: "linear-gradient(135deg, #0d281e 0%, #143e30 50%, #256f57 100%)",
     accentBg: "linear-gradient(135deg, rgba(20, 62, 48, 0.08) 0%, rgba(37, 111, 87, 0.04) 100%)",
     borderColor: "#1b5341",
-    tag: "Prototype Arena · Student Idea Grants",
-    passType: "INNOVATOR · PROTOTYPE PASS",
+    tag: "School Innovation · Idea Showcase",
+    passType: "JUNIOR · STUDENT PASS",
     perks: [
       {
         title: "Prototype Demo Desk",
@@ -1117,6 +1120,15 @@ export default function RegisterPage() {
           margin: 0 0 6px;
           line-height: 1.25;
         }
+        .track-age-pill {
+          display: block;
+          margin: 0 0 9px;
+          color: #143e30;
+          font-size: 14px;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+          line-height: 1.3;
+        }
         .track-badge-sub {
           font-size: 11.5px;
           font-weight: 700;
@@ -1807,6 +1819,7 @@ export default function RegisterPage() {
                         </span>
                       </div>
                       <h3 className="track-title">{cat.title}</h3>
+                      <div className="track-age-pill">{cat.ageRange}</div>
                       <p className="track-badge-sub">{cat.badge}</p>
                       <p className="track-desc">{cat.desc}</p>
                     </div>

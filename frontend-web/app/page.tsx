@@ -31,8 +31,8 @@ export default function Home() {
       <div className="tracks-ribbon">
         <p className="tracks-ribbon-title">Open Registration Tracks</p>
         <div className="tracks-badges">
-          <span className="track-chip">Startup Leaders</span>
-          <span className="track-chip">Student Innovators</span>
+          <span className="track-chip">Senior Track · Ages 18–25</span>
+          <span className="track-chip">Junior Track · Ages 8–17</span>
         </div>
       </div>
     </section>
