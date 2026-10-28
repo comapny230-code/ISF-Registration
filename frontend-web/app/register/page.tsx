@@ -854,7 +854,7 @@ export default function RegisterPage() {
               Your registration details have been saved. You will be contacted by the ISF team with further details about your summit pass and schedule.
             </p>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #e8dfd3", fontSize: 13.5, lineHeight: 1.6 }}>
-              <strong style={{ color: "#1c1917", display: "block", marginBottom: 3 }}>For Printing Material Contact Details</strong>
+              <strong style={{ color: "#e87042", display: "block", marginBottom: 3 }}>For Printing Material Contact Details</strong>
               <strong style={{ color: "#1c1917", display: "block" }}>Mr. Rajendra Kumar Patro</strong>
               <a href="mailto:rajurajpatro@gmail.com" style={{ color: "#57534e", textDecoration: "none", display: "block" }}>
                 rajurajpatro@gmail.com
