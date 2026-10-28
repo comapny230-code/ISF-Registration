@@ -24,18 +24,20 @@ export async function requireLeader(request: Request): Promise<Authenticated> {
   return { sql, session };
 }
 
+/** Requires an admin session holding the permission (or any one of several, for read-only views). */
 export async function requireAdmin(
   request: Request,
-  permission: AdminPermission,
+  permission: AdminPermission | AdminPermission[],
   options: { stepUp?: boolean } = {}
 ): Promise<Authenticated> {
   const sql = await getDb();
   const session = await getSession(sql, request, "admin");
   if (!session) throw UNAUTHENTICATED();
 
+  const accepted = Array.isArray(permission) ? permission : [permission];
   const [grant] = await sql`
     select 1 from app_auth.admin_grants
-     where admin_user_id = ${session.principalId} and permission = ${permission} and revoked_at is null`;
+     where admin_user_id = ${session.principalId} and permission = any(${accepted}::text[]) and revoked_at is null`;
   if (!grant) throw new HttpError(403, "FORBIDDEN", "You do not have permission to do this.");
 
   if (options.stepUp && !session.reauthFresh) {

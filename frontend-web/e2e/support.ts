@@ -127,6 +127,57 @@ export async function plantLoginCode(email: string, code: string) {
       from user_accounts u where lower(u.email) = ${email}`;
 }
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export async function createAdminUser(permissions: string[]): Promise<AdminUser> {
+  const s = await db();
+  n += 1;
+  const email = `e2e-admin-${Date.now()}${n}@example.test`;
+  const name = `E2E Admin ${n}`;
+  const [admin] = await s`insert into app_auth.admin_users (email, display_name, created_by) values (${email}, ${name}, 'e2e') returning id`;
+  for (const permission of permissions) {
+    await s`insert into app_auth.admin_grants (admin_user_id, permission, granted_by) values (${admin.id}, ${permission}, 'e2e')`;
+  }
+  return { id: admin.id, email, name };
+}
+
+/** Replaces any pending administrator code with a known one. */
+export async function plantAdminCode(email: string, code: string) {
+  const s = await db();
+  const id = randomUUID();
+  await s`update app_auth.login_challenges set superseded_at = clock_timestamp()
+          where audience = 'admin' and email = ${email} and consumed_at is null and superseded_at is null`;
+  await s`
+    insert into app_auth.login_challenges (id, audience, email, admin_user_id, code_mac, expires_at)
+    select ${id}, 'admin', ${email}, a.id, ${createHmac("sha256", E2E_ENV.OTP_PEPPER).update(`${id}:${code}`).digest()},
+           clock_timestamp() + interval '10 minutes'
+      from app_auth.admin_users a where a.email = ${email}`;
+}
+
+export async function signInAdmin(context: BrowserContext, admin: AdminUser) {
+  await plantAdminCode(admin.email, "135790");
+  const res = await context.request.post(`${E2E_ORIGIN}/v1/auth/otp/verify`, {
+    headers: { origin: E2E_ORIGIN, "content-type": "application/json" },
+    data: { email: admin.email, audience: "admin", code: "135790" },
+  });
+  if (res.status() !== 200) throw new Error(`admin sign-in failed: ${res.status()} ${await res.text()}`);
+}
+
+/** Holds and confirms a stall for a leader through the real API; returns the booking. */
+export async function bookAs(request: APIRequestContext, leader: Leader, stallId: string) {
+  const held = await (await holdAs(request, leader, stallId)).json();
+  const res = await request.post(`${E2E_ORIGIN}/v1/booking/holds/${held.holdId}/confirm`, {
+    headers: { origin: E2E_ORIGIN, cookie: `__Host-sj_session=${leader.token}`, "content-type": "application/json" },
+    data: { token: held.token },
+  });
+  if (res.status() !== 201) throw new Error(`confirm failed: ${res.status()}`);
+  return (await res.json()) as { bookingId: string; bookingRef: string };
+}
+
 /** Places a hold for another team through the real API (not the page under test). */
 export async function holdAs(request: APIRequestContext, leader: Leader, stallId: string) {
   return request.post(`${E2E_ORIGIN}/v1/booking/holds`, {

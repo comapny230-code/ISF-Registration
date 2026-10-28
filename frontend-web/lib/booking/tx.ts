@@ -39,6 +39,9 @@ function classify(err: any): HttpError | "retry" | null {
     return new HttpError(409, "STALL_UNAVAILABLE", "This stall is not available.", { reason: "unavailable" });
   }
   if (code === "23505" && constraint === "reservations_booking_ref_uq") return "retry";
+  if (code === "23505" && constraint === "reservations_cancel_request_uq") {
+    return new HttpError(409, "REQUEST_ID_REUSED", "This request id was already used for a different booking.");
+  }
   if (code === "23505" && constraint === "reservations_live_stall_uq") {
     console.warn("[BOOKING] live-stall unique index fired; locking should have prevented this");
     return new HttpError(409, "STALL_UNAVAILABLE", "This stall is not available.", { reason: "held" });

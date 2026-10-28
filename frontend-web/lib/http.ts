@@ -158,6 +158,19 @@ export const v = {
     }
     return value;
   },
+  /** Mandatory human-readable reason for administrative changes (10–500 characters). */
+  reason: (value: unknown, field: string): string => {
+    const text = typeof value === "string" ? value.trim() : "";
+    if (text.length < 10 || text.length > 500) {
+      throw new HttpError(400, "VALIDATION", `${field} must be between 10 and 500 characters.`, { field });
+    }
+    return text;
+  },
+  optionalBoolean: (value: unknown, field: string): boolean => {
+    if (value === undefined) return false;
+    if (typeof value !== "boolean") throw new HttpError(400, "VALIDATION", `${field} must be true or false.`, { field });
+    return value;
+  },
   pattern:
     (re: RegExp) =>
     (value: unknown, field: string): string => {
@@ -166,6 +179,45 @@ export const v = {
       }
       return value;
     },
+};
+
+/** Reads and validates list query parameters; unknown parameters are rejected. */
+export function listQuery<T extends Record<string, string | null>>(
+  request: Request,
+  allowed: { [K in keyof T]: (value: string | null) => T[K] },
+  maxLimit: number
+): T & { cursor: string | null; limit: number } {
+  const params = new URL(request.url).searchParams;
+  const known = new Set([...Object.keys(allowed), "cursor", "limit"]);
+  const unknown = [...params.keys()].filter((k) => !known.has(k));
+  if (unknown.length > 0) throw new HttpError(400, "VALIDATION", "Unexpected query parameters.", { fields: unknown });
+
+  const out = {} as T;
+  for (const key of Object.keys(allowed) as Array<keyof T>) out[key] = allowed[key](params.get(key as string));
+  const rawLimit = params.get("limit");
+  const limit = rawLimit === null ? Math.min(50, maxLimit) : Number(rawLimit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
+    throw new HttpError(400, "VALIDATION", `limit must be between 1 and ${maxLimit}.`);
+  }
+  const cursor = params.get("cursor");
+  if (cursor !== null && !/^[A-Za-z0-9_-]{1,512}$/.test(cursor)) throw new HttpError(400, "VALIDATION", "cursor is invalid.");
+  return { ...out, cursor, limit };
+}
+
+export const q = {
+  oneOfOrNull:
+    <T extends string>(...allowed: T[]) =>
+    (value: string | null): T | null => {
+      if (value === null) return null;
+      if (!allowed.includes(value as T)) throw new HttpError(400, "VALIDATION", `Expected one of: ${allowed.join(", ")}.`);
+      return value as T;
+    },
+  uuidOrNull: (value: string | null): string | null => (value === null ? null : v.uuid(value, "id")),
+  zoneOrNull: (value: string | null): string | null => {
+    if (value === null) return null;
+    if (!/^[A-Z]{2}$/.test(value)) throw new HttpError(400, "VALIDATION", "zone must be a two-letter zone code.");
+    return value;
+  },
 };
 
 // ---------------------------------------------------------------------------

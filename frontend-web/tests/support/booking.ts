@@ -207,7 +207,8 @@ export async function assertInvariants(): Promise<void> {
         (select 1 from booking.audit_events a where a.reservation_id = r.id and a.action = 'hold_expired'))::int as missing_hold_expired,
       (select count(*) from (select reservation_id, action from booking.audit_events
         where action in ('hold_created','booking_confirmed','hold_released','hold_expired')
-        group by reservation_id, action having count(*) > 1) x)::int as duplicate_audit_events`;
+        group by reservation_id, action having count(*) > 1) x)::int as duplicate_audit_events,
+      (select count(*) from booking.audit_events where jsonb_typeof(details) <> 'object')::int as non_object_audit_details`;
   expect(inv).toEqual({
     duplicate_stall_claims: 0,
     duplicate_team_claims: 0,
@@ -218,5 +219,6 @@ export async function assertInvariants(): Promise<void> {
     missing_hold_released: 0,
     missing_hold_expired: 0,
     duplicate_audit_events: 0,
+    non_object_audit_details: 0,
   });
 }

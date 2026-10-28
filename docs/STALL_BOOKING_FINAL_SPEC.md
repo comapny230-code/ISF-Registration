@@ -1353,6 +1353,24 @@ Each bullet is about one reviewable PR with its own tests. **P0** is human-only.
   5. LIVE-04 (out-of-order responses) is covered by poller unit tests, not by Playwright.
   6. The header link's flag is fixed at build time for static pages.
 
+**P5, implemented after checkpoint `477b469` (uncommitted):**
+- **Service:** `lib/booking/admin.ts`:
+  - cancel (§4.8)
+  - stall availability (§4.9): unlocked read → lock team → stall → reservation → re-validate, restarting up to 3 times if the claim changed
+  - team approval
+  - keyset-paginated lists (bookings, teams with unresolved-leader counts, audit)
+- **Routes:** E10–E15 under `app/v1/admin/`. Writes require their own permission, step-up (a code within 10 minutes), same-origin JSON, a 10–500-character reason, a client request id, and an admin rate limit.
+- **Page:** `/admin`, server-gated, with permission-filtered tabs and one action dialog that runs step-up inline and retries with the same request id. `/admin/login` honours `next`.
+- **Tests:** `tests/integration/admin-api.test.ts` (AUTH-11 matrix, cancel/availability/approval, lists), `tests/concurrency/admin-races.test.ts` (RACE-13, RACE-14), and `e2e/admin.spec.ts` (E2E-08, including the step-up flow).
+- **Fixed:** `booking.audit_events.details` was stored as a double-encoded JSON *string*. postgres.js serialises `jsonb` parameters itself, so pre-stringifying encoded twice. Fixed, and "details is a JSON object" is now part of the invariant check (INV).
+- **Finding, not changed:** the same pattern exists in the pre-existing registration code for `user_accounts.team_members_json`. Existing production rows are therefore very likely JSON strings rather than arrays. Nothing in the app reads this column. Changing it now would mix formats, so it is left as is (owner: [DEV] with [INFRA] for any data repair).
+- **Deviations:**
+  1. E10/E13 accept either of two permissions, as the spec allows.
+  2. A cancellation request id reused for a different booking returns `409 REQUEST_ID_REUSED`.
+  3. Disabling an already-disabled stall, or setting an unchanged approval, returns `changed: false` with no audit row.
+  4. The admin stall view uses the E5 snapshot, which shows `unavailable` for both disabled and unapproved stalls; enabling an unapproved stall returns `STALL_NOT_APPROVED`.
+  5. No settings-editing UI: opening booking stays an operator runbook action (D-01..D-07).
+
 **Not verified (owner):**
 - Production schema, grants, RLS and Data API exposure (B-03, B-04, [INFRA])
 - Whether exposed credentials are still valid (deliberately not tested; [INFRA])

@@ -81,7 +81,7 @@ export interface MyBooking {
   reservation: HoldReservation | BookingReservation | null;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -107,7 +107,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-const post = <T>(path: string, body: unknown, method = "POST") => request<T>(path, { method, body: JSON.stringify(body) });
+export const post = <T>(path: string, body: unknown, method = "POST") => request<T>(path, { method, body: JSON.stringify(body) });
 
 export const bookingApi = {
   snapshot: () => request<Snapshot>("/v1/booking/stalls"),

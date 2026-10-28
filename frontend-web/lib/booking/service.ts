@@ -33,7 +33,7 @@ export interface BookingView {
   confirmedAt: Date;
 }
 
-interface Decision {
+export interface Decision {
   decided: string; // clock_timestamp()::text, full precision, reused as ${decided}::timestamptz
   now: Date;
   bookingEnabled: boolean;
@@ -46,7 +46,7 @@ interface Decision {
   maxNewHoldsPerHour: number;
 }
 
-interface LockedReservation {
+export interface LockedReservation {
   id: string;
   team_id: string;
   stall_id: string;
@@ -68,7 +68,7 @@ export function assertHoldSecondsAllowed(appEnv: string, holdSeconds: number): v
 }
 
 /** Reads the decision timestamp (after all locks) together with the edition's settings. */
-async function decide(tx: Tx): Promise<Decision> {
+export async function decide(tx: Tx): Promise<Decision> {
   const [row] = await tx`
     with d as materialized (select clock_timestamp() as t)
     select d.t::text as decided, d.t as now,
@@ -97,7 +97,7 @@ async function decide(tx: Tx): Promise<Decision> {
 }
 
 /** Re-reads already-locked reservations and evaluates expiry against decided_at in SQL (no precision loss). */
-async function evaluate(tx: Tx, ids: string[], decided: string): Promise<LockedReservation[]> {
+export async function evaluate(tx: Tx, ids: string[], decided: string): Promise<LockedReservation[]> {
   if (ids.length === 0) return [];
   return (await tx`
     select r.id, r.team_id, r.stall_id, st.code as stall_code, r.status,
@@ -108,24 +108,37 @@ async function evaluate(tx: Tx, ids: string[], decided: string): Promise<LockedR
      where r.id = any(${ids}::uuid[])`) as unknown as LockedReservation[];
 }
 
-interface AuditEvent {
-  action: "hold_created" | "hold_released" | "hold_expired" | "booking_confirmed";
-  actor: { type: "leader"; userId: string } | { type: "system" };
-  teamId: string;
-  stallId: string;
-  reservationId: string;
+export interface AuditEvent {
+  action:
+    | "hold_created"
+    | "hold_released"
+    | "hold_expired"
+    | "booking_confirmed"
+    | "booking_cancelled"
+    | "stall_disabled"
+    | "stall_enabled"
+    | "team_approval_changed";
+  actor: { type: "leader"; userId: string } | { type: "admin"; adminId: string } | { type: "system" };
+  teamId?: string | null;
+  stallId?: string | null;
+  reservationId?: string | null;
   requestId: string;
+  reason?: string | null;
   details?: Record<string, unknown>;
 }
 
-async function audit(tx: Tx, e: AuditEvent): Promise<void> {
+/** Note: postgres.js serialises jsonb parameters itself; passing JSON.stringify() output would double-encode. */
+export async function audit(tx: Tx, e: AuditEvent): Promise<void> {
   await tx`
-    insert into booking.audit_events (edition_id, action, actor_type, actor_user_id, team_id, stall_id, reservation_id, request_id, details)
-    values (${EDITION_ID}, ${e.action}, ${e.actor.type}, ${e.actor.type === "leader" ? e.actor.userId : null},
-            ${e.teamId}, ${e.stallId}, ${e.reservationId}, ${e.requestId}, ${JSON.stringify(e.details ?? {})}::jsonb)`;
+    insert into booking.audit_events
+      (edition_id, action, actor_type, actor_user_id, actor_admin_id, team_id, stall_id, reservation_id, request_id, reason, details)
+    values (${EDITION_ID}, ${e.action}, ${e.actor.type},
+            ${e.actor.type === "leader" ? e.actor.userId : null}, ${e.actor.type === "admin" ? e.actor.adminId : null},
+            ${e.teamId ?? null}, ${e.stallId ?? null}, ${e.reservationId ?? null}, ${e.requestId}, ${e.reason ?? null},
+            ${(e.details ?? {}) as never}::jsonb)`;
 }
 
-async function markExpired(tx: Tx, r: LockedReservation, decided: string, requestId: string): Promise<void> {
+export async function markExpired(tx: Tx, r: LockedReservation, decided: string, requestId: string): Promise<void> {
   await tx`update booking.reservations set status = 'expired', expired_at = ${decided}::timestamptz where id = ${r.id}`;
   await audit(tx, {
     action: "hold_expired",
@@ -148,7 +161,7 @@ function holdView(r: LockedReservation, teamId: string, now: Date): HoldView {
   };
 }
 
-function bookingView(r: LockedReservation): BookingView {
+export function bookingView(r: LockedReservation): BookingView {
   return {
     bookingId: r.booking_id!,
     bookingRef: r.booking_ref!,
@@ -176,7 +189,7 @@ function newHoldBlocker(d: Decision, team: TeamRow): HttpError | null {
   return null;
 }
 
-async function lockStalls(tx: Tx, stallIds: string[]): Promise<void> {
+export async function lockStalls(tx: Tx, stallIds: string[]): Promise<void> {
   await tx`select id from booking.stalls where id = any(${[...new Set(stallIds)]}::uuid[]) order by id for update`;
 }
 

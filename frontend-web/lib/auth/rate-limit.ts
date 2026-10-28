@@ -23,6 +23,7 @@ export const LIMITS = {
   holdPerUser: { name: "hold:user:1m", windowSeconds: 60, max: 30 },
   confirmPerUser: { name: "confirm:user:1m", windowSeconds: 60, max: 30 },
   releasePerUser: { name: "release:user:1m", windowSeconds: 60, max: 30 },
+  adminWritePerAdmin: { name: "admin-write:admin:1m", windowSeconds: 60, max: 30 },
   registrationPerIp: { name: "register:ip:15m", windowSeconds: 15 * 60, max: 30 },
 } satisfies Record<string, RateLimit>;
 
