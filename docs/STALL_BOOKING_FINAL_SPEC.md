@@ -1329,6 +1329,30 @@ Each bullet is about one reviewable PR with its own tests. **P0** is human-only.
   - Set `HOLD_TOKEN_KEYS`.
   - Booking stays closed until operators apply organiser decisions D-01..D-07 and an approved inventory (B-07, B-09).
 
+**P4, implemented after checkpoint `f433484` (uncommitted):**
+- **Page:** `/book-your-stall`. It's gated by `FEATURE_BOOKING_UI` and a server-side leader session; `/login` redirects back via `?next=`. Contents:
+  - zone tabs and an SVG map drawn **only from surveyed geometry**
+  - an accessible list view, the default on phones
+  - a legend with non-colour marks
+  - a hold panel with a server-clock countdown
+  - a modal confirm dialog
+  - recovery through `/me` after any unknown outcome
+- **Live status:** `lib/booking/client-poller.ts` polls every 2.5 s, ignores responses older than `asOf`, backs off up to 15 s, and refreshes at expiry and on `visibilitychange`/`online`. `lib/booking/client-api.ts` is the typed API client.
+- **Inventory tooling:** `scripts/inventory/{inventory.mjs,cli.mjs}` (`validate`/`seed`/`preview`) generates `database/seeds/dev_stall_inventory_provisional.sql`. The seed refuses to run unless `isf.seed_environment` is `local`, `test` or `staging`.
+- **Inventory data:** the CSV and inventory document are updated with the second source `Map Startup (18-10-2026).pdf`. New conflicts V-17..V-20 are recorded; everything is still provisional, with no coordinates.
+- **Tests:**
+  - unit: poller, inventory, safe redirect
+  - database: the seed
+  - Playwright `e2e/` (E2E-01..07, LIVE-05)
+  - CI now builds and runs the browser tests
+- **Deviations:**
+  1. One inventory CLI with subcommands instead of three scripts.
+  2. Locally, the browser tests use the installed Edge; CI uses bundled Chromium. Tests sign in through the real verify endpoint with a planted code (no email). The test server runs `next start` with `NODE_ENV=test`.
+  3. Each test file now gets a uniquely named database, because an autovacuum worker can block `DROP DATABASE ... WITH (FORCE)` for the non-superuser test role.
+  4. The page opens on the first area that has an approved map.
+  5. LIVE-04 (out-of-order responses) is covered by poller unit tests, not by Playwright.
+  6. The header link's flag is fixed at build time for static pages.
+
 **Not verified (owner):**
 - Production schema, grants, RLS and Data API exposure (B-03, B-04, [INFRA])
 - Whether exposed credentials are still valid (deliberately not tested; [INFRA])

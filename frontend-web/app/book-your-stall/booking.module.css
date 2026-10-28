@@ -1,0 +1,302 @@
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 20px 48px;
+  display: grid;
+  gap: 18px;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin: 0;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--color-forest);
+  border-color: var(--color-forest);
+  color: #fff;
+}
+
+.tab:focus-visible,
+.listButton:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* SVG stalls show keyboard focus on the stall border instead of a box outline. */
+.stall:focus {
+  outline: none;
+}
+
+.stall:focus-visible rect {
+  stroke: var(--color-terracotta-dark);
+  stroke-width: 4px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+.aside {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Keep the hold countdown and the selected stall's actions in view on phones. */
+  .aside {
+    order: -1;
+  }
+}
+
+.code {
+  white-space: nowrap;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.panelTitle {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.mapWrap {
+  background: var(--color-ivory-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  overflow: auto;
+}
+
+.map {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+}
+
+/* Map units are feet; strokes use screen pixels so they stay crisp at any zoom. */
+.zoneOutline {
+  fill: #fff;
+  stroke: var(--color-charcoal-light);
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.stall {
+  cursor: pointer;
+}
+
+.stall rect {
+  stroke: var(--color-forest);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.stall text {
+  font-size: 2.6px;
+  font-weight: 700;
+  pointer-events: none;
+  fill: var(--ink);
+}
+
+.stall .mark {
+  font-size: 2.4px;
+}
+
+.available rect {
+  fill: #fff;
+}
+
+.held rect {
+  fill: url(#pattern-held);
+}
+
+.booked rect {
+  fill: var(--color-charcoal-mid);
+}
+
+.booked text {
+  fill: #fff;
+}
+
+.unavailable rect {
+  fill: url(#pattern-unavailable);
+  stroke: var(--color-charcoal-light);
+}
+
+.mine rect {
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+
+.selected rect {
+  stroke: var(--accent);
+  stroke-width: 3px;
+  stroke-dasharray: 5 3;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.list th,
+.list td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.list tr[aria-selected="true"] td {
+  background: var(--accent-soft);
+}
+
+.listButton {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.listButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  font-weight: 600;
+}
+
+.countdown {
+  font-family: var(--font-mono);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--color-terracotta-dark);
+  letter-spacing: 1px;
+}
+
+.countdownLow {
+  color: var(--danger);
+}
+
+.ref {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 1.25rem;
+}
+
+.landmarks {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 25, 23, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.dialog {
+  background: var(--card);
+  border-radius: var(--radius);
+  max-width: 440px;
+  width: 100%;
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

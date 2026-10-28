@@ -67,3 +67,20 @@ jobs:
         run: npm run test:db
         env:
           TEST_DATABASE_URL: postgresql://isf_test:isf_test@localhost:54329/isf_test
+
+      - name: Inventory is valid and the committed seed is up to date
+        run: |
+          node scripts/inventory/cli.mjs validate ../docs/stall_inventory_provisional.csv
+          node scripts/inventory/cli.mjs seed ../docs/stall_inventory_provisional.csv /tmp/seed.sql
+          sed -i 's#^-- Source: .*#-- Source: (ignored)#' /tmp/seed.sql
+          sed 's#^-- Source: .*#-- Source: (ignored)#' ../database/seeds/dev_stall_inventory_provisional.sql | diff - /tmp/seed.sql
+
+      - name: Build
+        run: npm run build
+
+      - name: Browser tests (Playwright, bundled Chromium)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+        env:
+          TEST_DATABASE_URL: postgresql://isf_test:isf_test@localhost:54329/isf_test

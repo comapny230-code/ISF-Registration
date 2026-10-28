@@ -63,6 +63,30 @@ Companion to [`STALL_BOOKING_FINAL_SPEC.md`](STALL_BOOKING_FINAL_SPEC.md) §7. P
 
 `Food Stall`, `Society for Advanced Food Engineering & Research (SAFER)`, `Biotech Department`. These have **no position**. The document does not say whether they are bookable, reserved or just landmarks.
 
+## 2a. Second source: `Map Startup (18-10-2026).pdf` (added 2026-10-28)
+
+| Property | Value (verified by inspection) |
+|---|---|
+| SHA-256 (first 16 hex) | `8f01e4a493e576c9` |
+| Producer / created | Online2PDF.com / 2026-10-28T17:06+01:00, which is later than the DOCX. The filename's "18-10-2026" does not match the creation date (V-20). |
+| Pages | 2 drawn plans. **Not to scale:** on page 2 the left column is drawn at about 19 px per stall against about 24 px on the top row. |
+
+**Page 2, "PLAYGROUND GIET UNIVERSITY" (zone PG):**
+- Labelled 338 FT (top and bottom) and 402 FT (left and right).
+- Stalls **1–30** form a row along the top, numbered left to right ("10 X 10 STALL").
+- Stalls **1–18** form a column down the left side from the top-left corner, numbered top to bottom.
+- Below them: a box labelled **67** (the 67 ft stage in the DOCX), then **FIELD ENTRY**.
+- "135 FT OPEN SPACE TOWARDS AGRICULTURE LAND" sits at the lower left; **HELIPAD** at the lower right.
+
+**Page 1 (no title; matches the Basketball Ground in the DOCX, zone BB):**
+- Labelled 101 FT (top and bottom) and 305 FT (sides).
+- **Mechanical Road** runs down the left side; **Bus-Stand Road** runs along the bottom; **Rang Manch** (101 FT) is at the top.
+- **Entry** and **Exit** are two vertical lanes from Bus-Stand Road up to the Rang Manch.
+- Left of Entry: a grey run labelled "10 X 10 STALL" with **no numbers**; the **ISF STALL** is below it.
+- Right of Exit: stalls **1–25** in a column, numbered top to bottom ("305 FT 10 X 10 STALL"); the **MEETING ROOM** is below it.
+
+**Not in the PDF:** the agricultural-gate zone (AG, 6 stalls in the DOCX), Food Stall, SAFER, Biotech Department.
+
 ## 3. Derived and assumed (needs organiser verification)
 
 | ID | Item | Derivation / assumption | Confidence |
@@ -83,6 +107,11 @@ Companion to [`STALL_BOOKING_FINAL_SPEC.md`](STALL_BOOKING_FINAL_SPEC.md) §7. P
 | V-14 | Zone codes and stall numbering | `PG`, `BB`, `AG` and `<zone>-<run letter><nn>` were **invented by the developer** for traceability. Numbering direction within a run is unknown. | Provisional |
 | V-15 | AG zone name | The table has no heading; the name was taken from its row 0 text | Provisional |
 | V-16 | Electricity, furniture, accessibility | Not in the document | Unknown |
+| V-05/V-06 (updated) | PG orientation and numbering | **PDF resolves the relative arrangement:** run A (30) along the 338 ft top edge, numbered left to right; run B (18) down the 402 ft left edge, numbered top to bottom. Exact coordinates and gaps are still unknown. | Medium |
+| **V-17** | **BB count conflict** | Meeting Room side: DOCX **28**, PDF **25** (numbered). ISF side: DOCX 25, PDF unnumbered. The CSV keeps 28 provisionally; rows BB-B26..28 are marked "ONLY IN DOCX". | **Conflict** |
+| **V-18** | **AG zone status** | Present in the DOCX (4 + 2 stalls), absent from the newer PDF. Is it still part of the plan? | Unknown |
+| V-19 | BB lanes | The PDF shows Entry and Exit as two parallel lanes between the runs, from Bus-Stand Road to the Rang Manch. The DOCX "Entry/Exit" rows likely mean these. | Medium |
+| V-20 | Which document is authoritative | The PDF was created after the DOCX, but its filename says 18-10-2026. The organisers must name the approved version. | Unknown |
 
 ## 4. Date discrepancy (not resolved here)
 
@@ -117,6 +146,9 @@ Coordinates **must not** be inferred from the schematic. The process is:
 
 ## 6. Organiser sign-off checklist
 
+- [ ] V-20: Which plan is authoritative (DOCX or PDF, and its real date)
+- [ ] V-17: Basketball Ground counts (Meeting Room side 25 or 28? ISF side 25?)
+- [ ] V-18: Is the agricultural-gate zone (6 stalls) still planned?
 - [ ] V-01: Final list of bookable stalls and their count per zone
 - [ ] V-09, V-10: Status of ISF 55 ft, Meeting Room, Rang Manch, Food Stall, SAFER, Biotech (bookable / reserved / landmark)
 - [ ] Reserved stalls for sponsors, GIET, ISF or departments, if any

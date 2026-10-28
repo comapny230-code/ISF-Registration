@@ -27,6 +27,29 @@ export function baseTestDatabaseUrl(): string {
   return process.env.ISF_TEST_BASE_DATABASE_URL;
 }
 
+/**
+ * Drops a test database, tolerating processes the test role may not terminate
+ * (autovacuum). Only names accepted by withDatabase() can be addressed.
+ */
+export async function dropDatabaseBestEffort(baseUrl: string, database: string): Promise<boolean> {
+  withDatabase(baseUrl, database); // validates the name
+  const { default: postgres } = await import("postgres");
+  const admin = postgres(baseUrl, { max: 1, onnotice: () => {} });
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await admin.unsafe(`drop database if exists ${database} with (force)`);
+        return true;
+      } catch {
+        await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+      }
+    }
+    return false;
+  } finally {
+    await admin.end();
+  }
+}
+
 export const MARKER_SQL =
   "create schema if not exists isf_test_guard; " +
   "create table if not exists isf_test_guard.marker (key text primary key, value text not null); " +

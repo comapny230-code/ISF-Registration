@@ -10,7 +10,14 @@ import {
   assertTestEnvironmentPreConnect,
 } from "../../lib/safety/test-database-guard";
 import type { TestProject } from "vitest/node";
-import { BASE_DATABASE, MARKER_SQL, TEMPLATE_DATABASE, baseTestDatabaseUrl, withDatabase } from "./test-db-urls";
+import {
+  BASE_DATABASE,
+  MARKER_SQL,
+  TEMPLATE_DATABASE,
+  baseTestDatabaseUrl,
+  dropDatabaseBestEffort,
+  withDatabase,
+} from "./test-db-urls";
 
 const migrationsDir = path.resolve(__dirname, "../../../database/migrations");
 const quiet = { max: 1, onnotice: () => {} } as const;
@@ -38,6 +45,9 @@ async function buildTemplate(project: TestProject) {
   const admin = postgres(baseUrl, quiet);
   try {
     await assertTestDatabasePostConnect((q) => admin.unsafe(q), BASE_DATABASE);
+    // Sweep per-file databases left by earlier runs (best-effort; see db-worker-setup.ts).
+    const leftovers = await admin`select datname from pg_database where datname ~ '^isf_test_w[a-z0-9]+$'`;
+    for (const { datname } of leftovers) await dropDatabaseBestEffort(baseUrl, datname);
     await admin.unsafe(`drop database if exists ${TEMPLATE_DATABASE} with (force)`);
     await admin.unsafe(`create database ${TEMPLATE_DATABASE}`);
   } finally {

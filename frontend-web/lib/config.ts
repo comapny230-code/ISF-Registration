@@ -269,6 +269,15 @@ export function getBookingConfig(env: Env = process.env): BookingConfig {
   return { currentKeyId: [...keys.keys()][0], holdTokenKeys: keys };
 }
 
+// ---------------------------------------------------------------------------
+// Feature flags (read without requiring the rest of the configuration so that
+// static pages still build; booking APIs enforce their own configuration).
+// ---------------------------------------------------------------------------
+
+export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean } {
+  return { bookingUi: env.FEATURE_BOOKING_UI?.trim() === "true" };
+}
+
 /** Validates every section; used at startup to log misconfiguration early. */
 export function validateRuntimeConfig(env: Env = process.env): ConfigError[] {
   const errors: ConfigError[] = [];

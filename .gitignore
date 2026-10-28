@@ -18,3 +18,7 @@ apps/console/AGENTS.md
 frontend-web/AGENTS.md
 frontend-console/AGENTS.md
 
+
+# Playwright output
+test-results/
+playwright-report/
