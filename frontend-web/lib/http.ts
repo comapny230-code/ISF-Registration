@@ -68,7 +68,7 @@ export function handler<P extends Record<string, string> = Record<string, string
       });
       if (misconfigured) {
         return json(
-          { error: { code: "SERVICE_MISCONFIGURED", message: "This service is temporarily unavailable.", requestId } },
+          { error: { code: "SERVICE_MISCONFIGURED", message: (err as any)?.message || "This service is temporarily unavailable.", requestId } },
           503,
           requestId
         );
