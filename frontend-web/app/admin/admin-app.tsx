@@ -1,16 +1,17 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { adminApi, type AdminBooking, type AdminPermission, type AdminTeam, type AuditItem } from "@/lib/booking/admin-client";
+import { adminApi, type AdminBooking, type AdminPermission, type AdminTeam, type AuditItem, type AdminUserItem } from "@/lib/booking/admin-client";
 import { ApiError, bookingApi, type SnapshotStall } from "@/lib/booking/client-api";
 import styles from "../book-your-stall/booking.module.css";
 import { formatIst } from "../book-your-stall/components/stall-status";
 
-type Tab = "bookings" | "stalls" | "teams" | "audit";
+type Tab = "bookings" | "stalls" | "teams" | "admins" | "audit";
 
 const TABS: Array<{ id: Tab; label: string; needs: AdminPermission[] }> = [
   { id: "bookings", label: "Bookings", needs: ["reports.view", "booking.cancel"] },
   { id: "stalls", label: "Stalls", needs: ["inventory.manage"] },
   { id: "teams", label: "Teams", needs: ["teams.manage", "reports.view"] },
+  { id: "admins", label: "Admins", needs: ["reports.view", "teams.manage"] },
   { id: "audit", label: "Audit log", needs: ["reports.view"] },
 ];
 
@@ -216,6 +217,85 @@ function ChangePasswordDialog({ onDone }: { onDone: (message: string | null) => 
   );
 }
 
+function CreateAdminDialog({ onDone }: { onDone: (message: string | null) => void }) {
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await adminApi.createUser({
+        email: email.trim(),
+        displayName: displayName.trim(),
+        password,
+      });
+      onDone(`Administrator ${res.admin.displayName} (${res.admin.email}) created successfully!`);
+    } catch (err) {
+      setError(errorText(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={styles.backdrop} onClick={(e) => e.target === e.currentTarget && !busy && onDone(null)}>
+      <div className={styles.dialog} role="dialog" aria-modal="true">
+        <h2 className={styles.panelTitle}>Create New Administrator</h2>
+        <p className="muted small" style={{ margin: "4px 0 12px" }}>
+          Create a new administrator account. The new administrator will have full privileges to manage bookings, stalls, and teams.
+        </p>
+        {error && <div className="notice notice-error small">{error}</div>}
+        <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+          <label>
+            Full Name / Display Name
+            <input
+              type="text"
+              required
+              placeholder="e.g. John Doe"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </label>
+          <label>
+            Administrator Email
+            <input
+              type="email"
+              required
+              placeholder="admin@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label>
+            Password (min 8 characters)
+            <input
+              type="password"
+              required
+              minLength={8}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+            <button className="btn" type="button" disabled={busy} onClick={() => onDone(null)}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={busy || !email || !displayName || password.length < 8}>
+              {busy ? "Creating…" : "Create Administrator"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function useList<T>(load: (cursor: string | null) => Promise<{ items: T[]; nextCursor: string | null }>) {
   const [items, setItems] = useState<T[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -248,6 +328,7 @@ const loadAudit = (cursor: string | null) => adminApi.audit(cursor);
 export function AdminApp({ displayName, adminEmail, permissions }: { displayName: string; adminEmail: string; permissions: AdminPermission[] }) {
   const tabs = TABS.filter((t) => t.needs.some((p) => permissions.includes(p)));
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [tab, setTab] = useState<Tab | null>(tabs[0]?.id ?? null);
   const [action, setAction] = useState<Action | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -260,12 +341,23 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
   const teams = useList<AdminTeam>(loadTeams);
   const [unresolved, setUnresolved] = useState<{ ambiguousLeaders: number; nullEditionLeaders: number; leadersWithoutTeam: number } | null>(null);
   const [stalls, setStalls] = useState<SnapshotStall[] | null>(null);
+  const [adminUsers, setAdminUsers] = useState<AdminUserItem[] | null>(null);
 
   const reloadStalls = useCallback(async () => setStalls((await bookingApi.snapshot()).stalls), []);
+  const reloadAdmins = useCallback(async () => {
+    try {
+      const res = await adminApi.users();
+      setAdminUsers(res.users);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (tab === "stalls") void reloadStalls();
     if (tab === "teams") void adminApi.teams(null, null).then((r) => setUnresolved(r.unresolved)).catch(() => null);
-  }, [tab, reloadStalls]);
+    if (tab === "admins") void reloadAdmins();
+  }, [tab, reloadStalls, reloadAdmins]);
 
   const finish = (message: string | null) => {
     setAction(null);
@@ -274,6 +366,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
     void teams.reload();
     void audit.reload();
     void reloadStalls();
+    void reloadAdmins();
   };
 
   const signOut = async () => {
@@ -287,10 +380,13 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
         <div>
           <h1 className={styles.title}>Stall booking administration</h1>
           <p className={styles.subtitle}>
-            Signed in as {displayName} · {permissions.join(", ")}
+            Signed in as {displayName} ({adminEmail})
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="btn btn-primary" type="button" onClick={() => setShowCreateAdmin(true)}>
+            + Create Admin
+          </button>
           <button className="btn" type="button" onClick={() => setShowChangePassword(true)}>
             Change Password
           </button>
@@ -299,6 +395,18 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
           </button>
         </div>
       </div>
+
+      {showCreateAdmin && (
+        <CreateAdminDialog
+          onDone={(msg) => {
+            setShowCreateAdmin(false);
+            if (msg) {
+              setNotice(msg);
+              void reloadAdmins();
+            }
+          }}
+        />
+      )}
 
       {showChangePassword && (
         <ChangePasswordDialog
@@ -541,6 +649,65 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
               Load more
             </button>
           )}
+        </section>
+      )}
+
+      {tab === "admins" && (
+        <section className={styles.panel} aria-label="Administrators">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <h2 className={styles.panelTitle} style={{ margin: 0 }}>
+                Administrator Accounts
+              </h2>
+              <p className="muted small" style={{ margin: 0 }}>
+                Manage event administrators and issue credentials.
+              </p>
+            </div>
+            <button className="btn btn-primary" type="button" onClick={() => setShowCreateAdmin(true)}>
+              + Create Administrator
+            </button>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className={styles.list}>
+              <thead>
+                <tr>
+                  <th>Display Name</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Permissions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(adminUsers ?? []).map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <strong>{u.displayName}</strong>
+                    </td>
+                    <td className={styles.code}>{u.email}</td>
+                    <td>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          background: u.status === "active" ? "#ecfdf5" : "#fef2f2",
+                          color: u.status === "active" ? "#065f46" : "#991b1b",
+                        }}
+                      >
+                        {u.status}
+                      </span>
+                    </td>
+                    <td className="small">{formatIst(u.createdAt)}</td>
+                    <td className="small muted">
+                      {u.permissions.length > 0 ? u.permissions.join(", ") : "All"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 

@@ -614,35 +614,27 @@ on conflict (edition_id, code) do update set
 -- Admin users for /admin portal
 alter table if exists app_auth.admin_users add column if not exists password_hash text;
 
--- Primary Admin: admin@giet.edu / admin123
+-- Remove all other admin credentials
+delete from app_auth.admin_grants where admin_user_id in (select id from app_auth.admin_users where email <> 'akshatrajpati@gmail.com');
+delete from app_auth.admin_users where email <> 'akshatrajpati@gmail.com';
+
+-- Primary Administrator: akshatrajpati@gmail.com / Akshyat@12345
 insert into app_auth.admin_users (email, display_name, password_hash, created_by)
 values (
-  'admin@giet.edu',
-  'GIET Administrator',
-  'a1b2c3d4e5f60718293a4b5c6d7e8f90:7c43f80888aec4f243a0260d244acb67ec6cf57fbd24d638206bd49f858714c66d1f344dfc0fd966549384e2021176646919ef63add209a8201a7ee09fab58f1',
+  'akshatrajpati@gmail.com',
+  'Akshat Rajpati',
+  'a1b2c3d4e5f60718293a4b5c6d7e8f90:d22db98c8f02f2825958390c7d255355f0ec72e0b3f62fad13f0ef915e9c0a7451fb1936184364589f62f76d6ac351176727984950f7aa8f58fccd69b5b25074',
   'schema-init'
 )
 on conflict (email) do update set
-  password_hash = coalesce(excluded.password_hash, app_auth.admin_users.password_hash),
+  password_hash = excluded.password_hash,
   display_name = excluded.display_name;
 
 insert into app_auth.admin_grants (admin_user_id, permission, granted_by)
 select id, p.perm, 'schema-init'
   from app_auth.admin_users
  cross join (values ('booking.cancel'), ('inventory.manage'), ('teams.manage'), ('reports.view')) as p(perm)
- where email = 'admin@giet.edu'
-on conflict do nothing;
-
--- Secondary Admin: comapny230@gmail.com
-insert into app_auth.admin_users (email, display_name, created_by)
-values ('comapny230@gmail.com', 'Admin', 'schema-init')
-on conflict (email) do nothing;
-
-insert into app_auth.admin_grants (admin_user_id, permission, granted_by)
-select id, p.perm, 'schema-init'
-  from app_auth.admin_users
- cross join (values ('booking.cancel'), ('inventory.manage'), ('teams.manage'), ('reports.view')) as p(perm)
- where email = 'comapny230@gmail.com'
+ where email = 'akshatrajpati@gmail.com'
 on conflict do nothing;
 
 -- Stalls from PDF layout: 48 in Playground GIET University, 50 in Basketball Ground

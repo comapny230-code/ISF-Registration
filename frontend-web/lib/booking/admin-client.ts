@@ -52,6 +52,15 @@ const qs = (params: Record<string, string | null | undefined>) => {
   return text ? `?${text}` : "";
 };
 
+export interface AdminUserItem {
+  id: string;
+  email: string;
+  displayName: string;
+  status: "active" | "disabled";
+  createdAt: string;
+  permissions: string[];
+}
+
 export const adminApi = {
   bookings: (cursor?: string | null) => request<Page<AdminBooking>>(`/v1/admin/bookings${qs({ cursor, limit: "50" })}`),
   teams: (approval?: string | null, cursor?: string | null) =>
@@ -59,6 +68,9 @@ export const adminApi = {
       `/v1/admin/teams${qs({ approval, cursor, limit: "50" })}`
     ),
   audit: (cursor?: string | null) => request<Page<AuditItem>>(`/v1/admin/audit${qs({ cursor, limit: "50" })}`),
+  users: () => request<{ users: AdminUserItem[] }>(`/v1/admin/users`),
+  createUser: (data: { email: string; displayName: string; password: string }) =>
+    post<{ ok: true; admin: { id: string; email: string; displayName: string } }>(`/v1/admin/users`, data),
   cancel: (bookingId: string, reason: string, requestId: string) =>
     post(`/v1/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, { reason, requestId }),
   availability: (stallId: string, action: "disable" | "enable", reason: string, force: boolean, requestId: string) =>
