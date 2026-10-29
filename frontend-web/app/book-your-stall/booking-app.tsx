@@ -65,7 +65,10 @@ export function BookingApp({ displayName }: { displayName: string }) {
     try {
       setMe(await bookingApi.me());
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) return toLogin();
+      if (err instanceof ApiError && err.status === 401) {
+        setMe(null);
+        return;
+      }
       setNotice({ kind: "error", text: err instanceof ApiError ? err.message : "Could not load your booking status." });
     }
   }, []);
@@ -79,7 +82,7 @@ export function BookingApp({ displayName }: { displayName: string }) {
         setOffsetMs(serverOffsetMs(s.serverNow, receivedAt));
       },
       onError: (err) => {
-        if (err instanceof ApiError && err.status === 401) toLogin();
+        if (err instanceof ApiError && err.status === 401) setMe(null);
       },
     });
     pollerRef.current = poller;
@@ -219,22 +222,41 @@ export function BookingApp({ displayName }: { displayName: string }) {
       <StallPatterns />
       <header className={styles.hero}>
         <div className={styles.heroInner}>
-          <div>
-            <h1 className={styles.heroTitle}>Book your stall</h1>
-            {me && (
-              <p className={styles.heroTeam}>
-                <strong>{me.team.name}</strong>
-                <span className={styles.trackPill}>{me.team.track === "senior" ? "Senior track" : "Junior track"}</span>
-              </p>
-            )}
-            <p className={styles.heroMeta}>
-              Signed in as {displayName}
-              {me?.bookingWindow.closesAt ? `. Booking closes ${formatIst(me.bookingWindow.closesAt)}.` : ""}
-            </p>
-          </div>
-          <button className={styles.heroButton} type="button" onClick={signOut}>
-            Sign out
-          </button>
+          {me ? (
+            <>
+              <div>
+                <h1 className={styles.heroTitle}>Book your stall</h1>
+                <p className={styles.heroTeam}>
+                  <strong>{me.team.name}</strong>
+                  <span className={styles.trackPill}>{me.team.track === "senior" ? "Senior track" : "Junior track"}</span>
+                </p>
+                <p className={styles.heroMeta}>
+                  Signed in as {displayName || me.team.name}
+                  {me?.bookingWindow.closesAt ? `. Booking closes ${formatIst(me.bookingWindow.closesAt)}.` : ""}
+                </p>
+              </div>
+              <button className={styles.heroButton} type="button" onClick={signOut}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <h1 className={styles.heroTitle}>Select & Book Your Stall</h1>
+                <p className={styles.heroMeta}>
+                  Explore available stalls on the interactive venue map. Select an available stall and sign in as your registered Team Leader to secure your booking.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                <a href="/login?next=/book-your-stall" className="btn btn-primary" style={{ padding: "8px 16px", textDecoration: "none" }}>
+                  Sign In as Leader
+                </a>
+                <a href="/register" className="btn btn-secondary" style={{ padding: "8px 16px", textDecoration: "none" }}>
+                  Register Team
+                </a>
+              </div>
+            </>
+          )}
         </div>
         <ol className={styles.steps} aria-label="Booking steps">
           {steps.map((label, i) => {
@@ -413,9 +435,19 @@ export function BookingApp({ displayName }: { displayName: string }) {
                             </dd>
                           </div>
                         </dl>
-                        <button className={`btn btn-primary ${styles.bigButton}`} type="button" onClick={bookStall} disabled={busy || !canHold}>
-                          {busy ? "Reserving…" : "Book my stall"}
-                        </button>
+                        {me ? (
+                          <button className={`btn btn-primary ${styles.bigButton}`} type="button" onClick={bookStall} disabled={busy || !canHold}>
+                            {busy ? "Reserving…" : "Book my stall"}
+                          </button>
+                        ) : (
+                          <a
+                            href={`/login?next=/book-your-stall`}
+                            className={`btn btn-primary ${styles.bigButton}`}
+                            style={{ textAlign: "center", textDecoration: "none", display: "block" }}
+                          >
+                            Sign in as Leader to Book Stall {selected.code}
+                          </a>
+                        )}
                         <p className="muted small" style={{ margin: 0 }}>
                           The stall is kept for you for 5 minutes while you confirm. Your team can book one stall.
                         </p>

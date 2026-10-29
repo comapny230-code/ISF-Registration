@@ -16,9 +16,19 @@ export const metadata: Metadata = { title: "Book your stall · ISF Startup Jatha
 export default async function BookYourStallPage() {
   if (!getFeatureFlags().bookingUi) notFound();
 
-  const cookie = (await headers()).get("cookie") ?? "";
-  const session = await getSession(await getDb(), new Request("http://internal/book-your-stall", { headers: { cookie } }), "leader");
-  if (!session) redirect("/login?next=/book-your-stall");
+  let displayName = "";
+  try {
+    const cookie = (await headers()).get("cookie") ?? "";
+    if (cookie.includes("session=")) {
+      const sql = await getDb();
+      const session = await getSession(sql, new Request("http://internal/book-your-stall", { headers: { cookie } }), "leader");
+      if (session) {
+        displayName = session.displayName;
+      }
+    }
+  } catch (err) {
+    console.warn("Session check in BookYourStallPage:", err);
+  }
 
-  return <BookingApp displayName={session.displayName} />;
+  return <BookingApp displayName={displayName} />;
 }

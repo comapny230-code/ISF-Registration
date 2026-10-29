@@ -18,8 +18,10 @@ export const GET = handler(async (request, { requestId }) => {
   const admin = leader ? null : await getSession(sql, request, "admin");
 
   if (!leader && !admin) {
-    const [settings] = await sql`select public_map from booking.settings where edition_id = ${EDITION_ID}`;
-    if (!settings?.public_map) throw new HttpError(401, "UNAUTHENTICATED", "Please sign in to continue.");
+    const [settings] = await sql`select public_map from booking.settings where edition_id = ${EDITION_ID}`.catch(() => [null]);
+    if (settings && settings.public_map === false) {
+      throw new HttpError(401, "UNAUTHENTICATED", "Please sign in to continue.");
+    }
   }
   consumePoll(leader?.id ?? admin?.id ?? `ip:${clientAddress(request)}`);
 
