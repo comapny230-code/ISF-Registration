@@ -4,7 +4,7 @@ import { getFeatureFlags } from "@/lib/config";
 
 export default function Home() {
   const { bookingUi } = getFeatureFlags();
-  const showBooking = bookingUi || process.env.NODE_ENV !== "production";
+  const showBooking = bookingUi !== false;
 
   return (
     <section className="hero">

@@ -286,7 +286,7 @@ export function getBookingConfig(env: Env = process.env): BookingConfig {
 // ---------------------------------------------------------------------------
 
 export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean } {
-  return { bookingUi: env.FEATURE_BOOKING_UI?.trim() === "true" };
+  return { bookingUi: env.FEATURE_BOOKING_UI?.trim() !== "false" };
 }
 
 // ---------------------------------------------------------------------------
