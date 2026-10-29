@@ -213,11 +213,17 @@ export default function RegisterPage() {
   // Optional Cloudflare human check (only when a site key is configured).
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaSiteKey, setCaptchaSiteKey] = useState<string | null>(null);
+  // Set when the organisers have paused registration (REGISTRATION_OPEN): the form is replaced by a notice.
+  const [pausedMessage, setPausedMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/v1/auth/register/form-token", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        if (d?.registrationOpen === false) {
+          setPausedMessage(typeof d.message === "string" ? d.message : "Registration is paused. Please check back later.");
+          return;
+        }
         setFormToken(typeof d?.token === "string" ? d.token : null);
         setCaptchaSiteKey(typeof d?.captchaSiteKey === "string" ? d.captchaSiteKey : null);
       })
@@ -910,6 +916,27 @@ export default function RegisterPage() {
           </div>
         </div>
         {handoff && <BookStallSection next={handoff.next} signedIn={handoff.signedIn} />}
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- Registration paused
+  if (pausedMessage) {
+    return (
+      <div role="status" aria-live="polite" style={{ maxWidth: 640, margin: "48px auto 64px", padding: "0 16px" }}>
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e8dfd3",
+            borderRadius: 20,
+            padding: "32px 24px",
+            textAlign: "center",
+            boxShadow: "0 20px 50px -10px rgba(20, 62, 48, 0.12)",
+          }}
+        >
+          <h1 style={{ margin: "0 0 12px", fontSize: 24, color: "#1c1917" }}>Registration is paused</h1>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "#57534e" }}>{pausedMessage}</p>
+        </div>
       </div>
     );
   }

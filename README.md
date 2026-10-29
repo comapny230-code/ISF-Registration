@@ -1,70 +1,101 @@
-# ISF · Startup Jathara 2026 — Registration System
+# ISF · Startup Jathara 2026 — Registration & Book Your Stall
 
-Official Registration Portal & Database for **Startup Leaders** and **Student Innovators** for **ISF · Startup Jathara @ Dandakaranya 2026** (18–20 December 2026, GIET University, Gunupur, Odisha).
+Registration portal, team-leader sign-in and stall booking for **ISF · Startup Jathara @ Dandakaranya 2026** (18–20 December 2026, GIET University, Gunupur, Odisha).
 
----
-
-## 🌟 Overview
-
-This repository has been streamlined strictly for attendee/applicant registration:
-- **Tracks Supported:**
-  1. **Startup Leaders** (Founders, Co-Founders, Growth Startups)
-  2. **Student Innovators** (College Innovation Labs, Undergraduates & Hardware/Software Prototypes)
-- **Features Included:**
-  - Team Lead & Team Member registration (1 to 5 members per team)
-  - Photograph compression & ImageKit CDN uploads
-  - Focus Sector & Innovation domain selection
-  - Complete location & LinkedIn accreditation
-  - Automated HTML confirmation email dispatch with full team accreditation manifest
-  - Direct PostgreSQL persistence
-  - Zero external bloat: all sign-in buttons, authentication dashboards, scoring, jury, volunteer, and extra legacy modules removed
+> **Status:** `main` is the live registration site. This branch (`feature/book-your-stall`) adds stall booking and a security rebuild and is **not live yet**: it needs the launch steps in [`docs/release/LAUNCH_EVIDENCE.md`](docs/release/LAUNCH_EVIDENCE.md) first. Registration is **paused by default** (see below).
 
 ---
 
-## 📁 Repository Structure
+## What it does
+
+- **Registration** for two tracks, Startup Leaders and Student Innovators, with teams of 1–5 members, photo upload (ImageKit), and an email confirmation code before anything is stored.
+- **Leader sign-in** by one-time email code (`/login`).
+- **Book Your Stall** (`/book-your-stall`): a live venue map; holds and bookings are atomic in the database, so two teams can never get the same stall. It's hidden unless `FEATURE_BOOKING_UI=true`.
+- **Admin** (`/admin`): operations for organisers (role-granted, see `docs/runbooks/admin-grants.md`).
+- **Safety:** same-origin checks, rate limits, bot filters, optional Cloudflare Turnstile, row-level security on every public table, a least-privilege database role (`isf_app`), and TLS-verified database and SMTP connections.
+
+## Registration pause switch
+
+Registration is open **only** when `REGISTRATION_OPEN=true`. If it's unset or has any other value, the form shows a "Registration is paused" notice, and email codes and submissions are refused with `503`. Sign-in, booking and admin are unaffected. See [`docs/runbooks/pause-registration.md`](docs/runbooks/pause-registration.md).
+
+---
+
+## Repository layout
 
 ```
-.
-├── database/
-│   ├── schema.sql                         # Unified PostgreSQL schema for registration
-│   └── migrations/
-│       └── 0001_registration_init.sql    # Clean consolidated migration
-├── frontend-web/
-│   ├── app/
-│   │   ├── page.tsx                       # Summit Landing & Direct Register CTA
-│   │   ├── layout.tsx                     # Header & Footer with Organizer Logos
-│   │   ├── globals.css                    # Jathara Warm-Terracotta & Forest design system
-│   │   ├── organizer-logos.tsx            # GIET University & ISF branding
-│   │   ├── register/
-│   │   │   └── page.tsx                   # Dedicated registration page
-│   │   └── v1/[...route]/
-│   │       └── route.ts                   # Registration API endpoint & DB handler
-│   ├── lib/
-│   │   └── utils.ts                       # LinkedIn URL normalizer & helpers
-│   ├── public/                            # Static logos & assets
-│   ├── package.json                       # Next.js frontend dependencies
-│   └── tsconfig.json
-└── package.json                           # Root workspace scripts
+database/
+  migrations/0001–0009_*.sql   Ordered schema migrations (applied with scripts/migrate.mts)
+  roles/isf_app_grants.sql     Least-privilege application role
+  verify/                      Post-migration checks (schema, RLS, grants)
+docs/
+  release/LAUNCH_EVIDENCE.md   Go-live gates, audit findings and test evidence
+  runbooks/                    Step-by-step operations (see below)
+  inventory/                   Stall inventory process (provisional until organiser approval)
+frontend-web/                  Next.js 16 app (UI + API under app/v1)
+  app/                         register, login, book-your-stall, admin, v1 API routes
+  lib/                         config, db, mail, auth, booking, registration, safety
+  scripts/                     preflight, mail-check, migrate, inventory CLI, test DB
+  tests/                       unit, db, integration and concurrency suites (Vitest)
+  e2e/                         Browser tests (Playwright)
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting started
 
-### 1. Install Dependencies
+Requires **Node 22+**.
+
 ```bash
 cd frontend-web
-npm install
+npm ci
+cp .env.example .env.local      # fill in values; never commit real ones
+npm run dev                     # http://localhost:3000
 ```
 
-### 2. Configure Environment
-Set the following environment variables (or rely on default connection values):
-- `DATABASE_URL`: PostgreSQL connection string
-- `IMAGEKIT_PRIVATE_KEY`: ImageKit API key for attendee badge photos
-- `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `SMTP_PORT`: SMTP settings for confirmation emails
+Every variable is explained in [`frontend-web/.env.example`](frontend-web/.env.example). The app checks its settings at startup and refuses to run with missing or unsafe ones. For a deployed environment, run the preflight first:
 
-### 3. Run Locally
 ```bash
-npm run dev
+npm run preflight               # prints variable names and problems, never values
+npm run mail:check -- --dns     # SMTP login + SPF/DKIM/DMARC for the sender domain
 ```
-Open [http://localhost:3000](http://localhost:3000) to view the registration portal.
+
+## Tests
+
+```bash
+npm run typecheck
+npm run test:unit
+npm run test-db:start           # isolated local PostgreSQL on localhost:54329
+npm run test:db                 # needs TEST_DATABASE_URL, see frontend-web/tests/README.md
+npm run test:e2e                # Playwright browser tests
+npm run build
+```
+
+Tests never connect to the production database: its project ID is on a deny-list.
+
+## Database migrations
+
+Migrations are applied with `frontend-web/scripts/migrate.mts` (`status`, `baseline`, `apply --dry-run`, `apply`, `verify`). Follow [`docs/runbooks/deploy-migrations.md`](docs/runbooks/deploy-migrations.md) and always do a dry run first.
+
+## Stall inventory
+
+The stall list is **provisional** until the organisers formally approve the layout and positions. Unapproved stalls can't be booked; the database enforces this. See [`docs/inventory/README.md`](docs/inventory/README.md).
+
+---
+
+## Runbooks
+
+| Runbook | Purpose |
+|---|---|
+| [pause-registration](docs/runbooks/pause-registration.md) | Pause or reopen registration |
+| [credential-rotation](docs/runbooks/credential-rotation.md) | Rotate database, SMTP and ImageKit credentials |
+| [email-provider](docs/runbooks/email-provider.md) | Set up the sending provider and sender DNS |
+| [deploy-migrations](docs/runbooks/deploy-migrations.md) | Apply database migrations safely |
+| [admin-grants](docs/runbooks/admin-grants.md) | Grant or revoke organiser admin access |
+| [team-ambiguity](docs/runbooks/team-ambiguity.md) | Resolve duplicate or unclear team records |
+| [wrong-email-recovery](docs/runbooks/wrong-email-recovery.md) | Fix a registration made with the wrong email |
+
+## Security
+
+- Never commit `.env*` files (other than `.env.example`), `.mcp.json`, or database dumps; they're gitignored.
+- Secret scanning uses gitleaks with the project's `.gitleaks.toml`.
+- Credentials that were committed in the past must be rotated; see the credential-rotation runbook.

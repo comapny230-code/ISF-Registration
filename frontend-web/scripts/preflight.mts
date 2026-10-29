@@ -36,6 +36,7 @@ try {
 if ((appEnv === "staging" || appEnv === "production") && !/^https:\/\//.test(env.APP_ORIGIN ?? "")) {
   warnings.push("APP_ORIGIN: should be the site's https:// address");
 }
+if (!getFeatureFlags(env).registrationOpen) warnings.push("REGISTRATION_OPEN is not 'true': registration is PAUSED (form shows a notice; email codes and submissions are refused)");
 if (!getFeatureFlags(env).bookingUi) warnings.push("FEATURE_BOOKING_UI is not 'true': the booking page and the post-registration booking step are hidden");
 if ((appEnv === "staging" || appEnv === "production") && !env.NOTIFY_REPLY_TO) {
   warnings.push("NOTIFY_REPLY_TO is not set: replies to emails will go to the no-reply sender");

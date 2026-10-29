@@ -12,7 +12,7 @@ import { clearedOtpBindingCookie, otpBindingFrom } from "@/lib/auth/otp";
 import { isValidAadhaar } from "@/lib/registration/aadhaar";
 import { verifyRegistrationCode } from "@/lib/registration/email-verification";
 import { checkCaptcha } from "@/lib/registration/captcha";
-import { checkFormToken, checkHoneypot } from "@/lib/registration/form-guard";
+import { assertRegistrationOpen, checkFormToken, checkHoneypot } from "@/lib/registration/form-guard";
 import {
   AadhaarAlreadyRegisteredError,
   AlreadyRegisteredError,
@@ -284,6 +284,13 @@ async function handleRequest(request: Request) {
 
   // POST /v1/auth/register or /v1/public/signup
   if ((path.includes("/auth/register") || path.includes("/public/signup")) && method === "POST") {
+    // Paused registration answers before any database work and is not logged as an error.
+    try {
+      assertRegistrationOpen();
+    } catch (err) {
+      const e = err as HttpError;
+      return Response.json({ code: e.code, message: e.message }, { status: e.status, headers: e.headers });
+    }
     try {
       const sql = await getDb();
       await consumeRateLimit(sql, LIMITS.registrationPerIp, clientAddress(request));

@@ -22,6 +22,8 @@ const TEST_ENV = {
   HOLD_TOKEN_KEYS: "t1:test-hold-token-key-0123456789abcdef",
   // Tests submit at machine speed; the minimum fill time is tested on its own.
   REGISTRATION_MIN_FILL_SECONDS: "0",
+  // Registration is closed unless explicitly opened (kill switch); tests exercise the open form.
+  REGISTRATION_OPEN: "true",
 };
 
 export default defineConfig({

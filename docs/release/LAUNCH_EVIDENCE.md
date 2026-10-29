@@ -68,3 +68,20 @@ Legend: **Met** = evidence attached · **Partly** = done locally, staging or hum
 - Typecheck clean; **324 unit, database, integration and race tests pass** (34 files, one full run, including the new mail, DNS, 0009 and inventory-activation tests); **21/21 Playwright** (installed Edge, desktop + mobile); `next build` OK; committed seed up to date.
 - gitleaks 8.21.2 (checksum-verified): working tree clean apart from git-ignored `.next/` build keys and `node_modules` docs; history findings unchanged (credential-rotation runbook).
 - Supabase checks were read-only through MCP (`read_only=true`); nothing was applied to the remote project.
+
+## Additional audit (2026-10-29, registration paused for go-live work)
+
+Beyond LG-01..LG-14. "Fixed" means done and tested locally; nothing is deployed.
+
+| # | Finding | Severity | Status |
+|---|---|---|---|
+| A-01 | No way to pause registration (neither live `main` nor this branch) | High | **Fixed**: `REGISTRATION_OPEN` kill switch, closed unless exactly `true` (this branch: tested REG-PAUSE; `hotfix/pause-registration` for live `main`: built and smoke-tested). Runbook `docs/runbooks/pause-registration.md` |
+| A-02 | Live `main` still has the leaked credentials **in its current files** as fallbacks (`route.ts`) and in both `.env.example` files, not only in history. Rotating the DB password would break the live API rather than pause it | Critical | **Fixed in the hotfix** (fallbacks removed, placeholders in `.env.example`; gitleaks clean). Deploy the hotfix **before** rotating |
+| A-03 | Live `main`: anyone can overwrite an existing registration (name, phone, team, Aadhaar, PAN) by submitting the same email; no email proof | Critical | Fixed on this branch (email codes, 409 for existing registrations); live until this branch ships. Paused registration stops it now |
+| A-04 | Live `main`: database and SMTP TLS certificates are not verified (`rejectUnauthorized: false`) | High | Fixed on this branch (CA-verified DB TLS, verified SMTP TLS) |
+| A-05 | Live `main`: CORS `*`, no rate limits, no bot filters, runtime DDL | Medium | Fixed on this branch |
+| A-06 | Live data (read-only check): 5 accounts, last created 2026-10-29 07:12 UTC; **2 were modified after creation**. Could be resubmissions or A-03 overwrites | Medium | **[ORG]** to confirm those two registrations with the people concerned |
+| A-07 | The registration form collects Aadhaar and PAN with **no privacy notice or consent** (who holds the data, purpose, retention, contact). India's DPDP Act 2023 requires notice and consent; Aadhaar numbers carry extra restrictions | High (legal) | **[ORG]** to supply the notice text and retention period (get legal advice); the developer then adds it with a consent checkbox. Consider whether the full Aadhaar number is needed at all |
+| A-08 | `nodemailer` advisory (moderate) | Medium | Mitigated in code; upgrade to ≥ 10.2.1 on or after 2026-11-05 (release-age rule) |
+| A-09 | Supabase performance advisor: 7 unindexed foreign keys, 6 unused indexes | Info | No action for tables this size |
+| A-10 | Supabase Storage and Auth unused (0 buckets, 0 users) | Info | Nothing exposed there |
