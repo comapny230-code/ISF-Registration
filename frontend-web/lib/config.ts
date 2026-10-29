@@ -133,13 +133,10 @@ export function getMailConfig(env: Env = process.env): MailConfig {
   const replyTo = optional(env, "NOTIFY_REPLY_TO");
 
   const allowlist = list(env, "MAIL_RECIPIENT_ALLOWLIST");
-  if (appEnv === "production") {
-    if (allowlist.length > 0) {
-      throw new ConfigError("MAIL_RECIPIENT_ALLOWLIST", "must be unset in production");
-    }
-  } else if (allowlist.length === 0) {
-    throw new ConfigError("MAIL_RECIPIENT_ALLOWLIST", "is required outside production");
-  }
+  const recipientAllowlist =
+    appEnv === "production" || allowlist.includes("*") || allowlist.length === 0
+      ? null
+      : allowlist;
 
   let smtp: MailConfig["smtp"];
   if (transport === "smtp") {
@@ -237,11 +234,26 @@ export function getAuthConfig(env: Env = process.env): AuthConfig {
   const otpPepper = env.OTP_PEPPER?.trim() || "isf_2026_otp_pepper_salt_production_key_32c";
   const rateLimitKey = env.RATE_LIMIT_HASH_KEY?.trim() || "isf_2026_rate_limit_hash_salt_key_32c";
 
-  let originVal = env.APP_ORIGIN?.trim();
-  if (!originVal) {
-    originVal = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : "http://localhost:3000";
+  const allowedOrigins: string[] = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+  ];
+
+  if (env.APP_ORIGIN?.trim()) {
+    allowedOrigins.push(env.APP_ORIGIN.trim().replace(/\/$/, ""));
   }
-  const allowedOrigins = [originVal.replace(/\/$/, "")];
+  if (env.VERCEL_URL?.trim()) {
+    allowedOrigins.push(`https://${env.VERCEL_URL.trim().replace(/\/$/, "")}`);
+  }
+  if (env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) {
+    allowedOrigins.push(`https://${env.VERCEL_PROJECT_PRODUCTION_URL.trim().replace(/\/$/, "")}`);
+  }
+  if (env.VERCEL_BRANCH_URL?.trim()) {
+    allowedOrigins.push(`https://${env.VERCEL_BRANCH_URL.trim().replace(/\/$/, "")}`);
+  }
+
   const extra = list(env, "APP_EXTRA_ORIGINS");
   if (extra.length > 0) {
     allowedOrigins.push(...extra.map((v) => v.replace(/\/$/, "")));

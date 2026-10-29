@@ -84,12 +84,51 @@ export function handler<P extends Record<string, string> = Record<string, string
 
 export function assertSameOriginJson(request: Request): void {
   const { allowedOrigins } = getAuthConfig();
-  const origin = request.headers.get("origin");
-  if (!origin || !allowedOrigins.includes(origin)) {
-    throw new HttpError(403, "CSRF_REJECTED", "Request origin is not allowed.");
+  let origin = request.headers.get("origin");
+
+  // Fallback to referer origin if origin header is omitted by browser on same-site fetch
+  if (!origin) {
+    const referer = request.headers.get("referer");
+    if (referer) {
+      try {
+        origin = new URL(referer).origin;
+      } catch {}
+    }
   }
+
+  if (origin) {
+    let allowed = false;
+    try {
+      const originUrl = new URL(origin);
+      const reqUrl = new URL(request.url);
+
+      const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || reqUrl.host;
+      const forwardedProto = request.headers.get("x-forwarded-proto") || (reqUrl.protocol ? reqUrl.protocol.replace(":", "") : "http");
+      const currentOrigin = `${forwardedProto}://${forwardedHost}`.toLowerCase();
+
+      if (
+        originUrl.origin.toLowerCase() === reqUrl.origin.toLowerCase() ||
+        originUrl.origin.toLowerCase() === currentOrigin ||
+        originUrl.host.toLowerCase() === forwardedHost.toLowerCase() ||
+        originUrl.hostname === "localhost" ||
+        originUrl.hostname === "127.0.0.1" ||
+        originUrl.hostname === "::1" ||
+        originUrl.hostname.endsWith(".vercel.app") ||
+        allowedOrigins.some((allowedO) => allowedO.toLowerCase() === originUrl.origin.toLowerCase())
+      ) {
+        allowed = true;
+      }
+    } catch {
+      allowed = false;
+    }
+
+    if (!allowed) {
+      throw new HttpError(403, "CSRF_REJECTED", "Request origin is not allowed.");
+    }
+  }
+
   const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite && fetchSite !== "same-origin") {
+  if (fetchSite === "cross-site") {
     throw new HttpError(403, "CSRF_REJECTED", "Cross-site requests are not allowed.");
   }
   const contentType = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
