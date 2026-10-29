@@ -7,6 +7,7 @@ import { ARRANGEMENTS_CONTACT } from "@/lib/booking/contact";
 import { BookedDialog } from "./components/booked-dialog";
 import { ConfirmDialog } from "./components/confirm-dialog";
 import { HoldPanel } from "./components/hold-panel";
+import { LeaderSignInDialog } from "./components/leader-sign-in-dialog";
 import { StallLegend, StallMap, StallPatterns, ZOOM_LEVELS } from "./components/stall-map";
 import { StallList } from "./components/stall-list";
 import { formatIst, hasGeometry, stallLabel, stallMark } from "./components/stall-status";
@@ -48,6 +49,8 @@ export function BookingApp({ displayName }: { displayName: string }) {
   // Set only from a successful confirmation response, so failures never show it.
   const [justBooked, setJustBooked] = useState<{ stallCode: string; bookingRef: string } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [currentDisplayName, setCurrentDisplayName] = useState(displayName);
   const pollerRef = useRef<StatusPoller<Snapshot> | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
 
@@ -231,7 +234,7 @@ export function BookingApp({ displayName }: { displayName: string }) {
                   <span className={styles.trackPill}>{me.team.track === "senior" ? "Senior track" : "Junior track"}</span>
                 </p>
                 <p className={styles.heroMeta}>
-                  Signed in as {displayName || me.team.name}
+                  Signed in as {currentDisplayName || displayName || me.team.name}
                   {me?.bookingWindow.closesAt ? `. Booking closes ${formatIst(me.bookingWindow.closesAt)}.` : ""}
                 </p>
               </div>
@@ -248,9 +251,14 @@ export function BookingApp({ displayName }: { displayName: string }) {
                 </p>
               </div>
               <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                <a href="/login?next=/book-your-stall" className="btn btn-primary" style={{ padding: "8px 16px", textDecoration: "none" }}>
+                <button
+                  type="button"
+                  onClick={() => setSignInOpen(true)}
+                  className="btn btn-primary"
+                  style={{ padding: "8px 16px", cursor: "pointer" }}
+                >
                   Sign In as Leader
-                </a>
+                </button>
                 <a href="/register" className="btn btn-secondary" style={{ padding: "8px 16px", textDecoration: "none" }}>
                   Register Team
                 </a>
@@ -440,13 +448,13 @@ export function BookingApp({ displayName }: { displayName: string }) {
                             {busy ? "Reserving…" : "Book my stall"}
                           </button>
                         ) : (
-                          <a
-                            href={`/login?next=/book-your-stall`}
+                          <button
+                            type="button"
+                            onClick={() => setSignInOpen(true)}
                             className={`btn btn-primary ${styles.bigButton}`}
-                            style={{ textAlign: "center", textDecoration: "none", display: "block" }}
                           >
                             Sign in as Leader to Book Stall {selected.code}
-                          </a>
+                          </button>
                         )}
                         <p className="muted small" style={{ margin: 0 }}>
                           The stall is kept for you for 5 minutes while you confirm. Your team can book one stall.
@@ -483,6 +491,22 @@ export function BookingApp({ displayName }: { displayName: string }) {
             busy={busy}
             onConfirm={confirmBooking}
             onCancel={() => setConfirmOpen(false)}
+          />
+        )}
+
+        {signInOpen && (
+          <LeaderSignInDialog
+            selectedStallCode={selected?.code}
+            onSuccess={async ({ displayName: name }) => {
+              setCurrentDisplayName(name);
+              setSignInOpen(false);
+              await Promise.all([loadMe(), pollerRef.current?.refresh()]);
+              setNotice({
+                kind: "ok",
+                text: `Signed in successfully as ${name}! You can now reserve and book your stall.`,
+              });
+            }}
+            onClose={() => setSignInOpen(false)}
           />
         )}
       </div>

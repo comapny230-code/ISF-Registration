@@ -12,63 +12,104 @@ function getFallbackSnapshot(zoneFilter?: string) {
   const allZones = [
     {
       code: "PG",
-      name: "Play Ground",
+      name: "Playground GIET University",
       extent: { widthFt: 338, depthFt: 402 },
       landmarks: [
-        { label: "Stage for Guru Ji (67 ft)", kind: "stage", x: 135, y: 10, w: 67, d: 20 },
-        { label: "Field Entry", kind: "entry", x: 10, y: 380, w: 40, d: 15 },
-        { label: "Road (20 ft)", kind: "road", x: 159, y: 30, w: 20, d: 350 },
+        { label: "67 FT Stage", kind: "stage", x: 2, y: 180, w: 14, d: 67 },
+        { label: "FIELD ENTRY", kind: "entry", x: 0, y: 250, w: 20, d: 15 },
+        { label: "135 FT OPEN SPACE TOWARDS AGRICULTURE LAND", kind: "open_space", x: 2, y: 270, w: 35, d: 125 },
+        { label: "HELIPAD", kind: "restricted", x: 220, y: 305, w: 105, d: 85 },
       ],
       inventoryStatus: "approved",
     },
     {
       code: "BB",
-      name: "Basketball Ground",
+      name: "Rang Manch / Basketball Ground",
       extent: { widthFt: 101, depthFt: 305 },
       landmarks: [
-        { label: "Rang Manch (101 ft)", kind: "stage", x: 0, y: 0, w: 101, d: 25 },
-        { label: "Entry lane", kind: "entry", x: 10, y: 285, w: 30, d: 15 },
-      ],
-      inventoryStatus: "approved",
-    },
-    {
-      code: "AG",
-      name: "Outside Agricultural Gate",
-      extent: { widthFt: 150, depthFt: 150 },
-      landmarks: [
-        { label: "Main Gate", kind: "entry", x: 20, y: 130, w: 30, d: 15 },
+        { label: "RANG MANCH (101 FT)", kind: "stage", x: 25, y: 0, w: 51, d: 18 },
+        { label: "MECHANICAL ROAD 305 FT", kind: "road", x: 2, y: 15, w: 10, d: 260 },
+        { label: "ENTRY", kind: "entry", x: 44, y: 18, w: 4, d: 260 },
+        { label: "EXIT", kind: "exit", x: 53, y: 18, w: 4, d: 260 },
+        { label: "ISF STALL", kind: "reserved", x: 12, y: 265, w: 30, d: 18 },
+        { label: "MEETING ROOM", kind: "reserved", x: 52, y: 265, w: 45, d: 18 },
+        { label: "BUS-STAND ROAD 101 FT", kind: "road", x: 0, y: 286, w: 101, d: 19 },
       ],
       inventoryStatus: "approved",
     },
   ];
 
-  const allStalls = [
-    // Zone PG stalls
-    { id: "pg-01", code: "PG-A01", zone: "PG", x: 20, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-02", code: "PG-A02", zone: "PG", x: 35, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-03", code: "PG-A03", zone: "PG", x: 50, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-04", code: "PG-A04", zone: "PG", x: 65, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-05", code: "PG-A05", zone: "PG", x: 80, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-06", code: "PG-A06", zone: "PG", x: 95, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-07", code: "PG-A07", zone: "PG", x: 110, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-08", code: "PG-A08", zone: "PG", x: 125, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-09", code: "PG-A09", zone: "PG", x: 140, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "pg-10", code: "PG-A10", zone: "PG", x: 155, y: 40, w: 10, d: 10, rot: 0, status: "available" as const },
+  const allStalls: Array<{
+    id: string;
+    code: string;
+    zone: string;
+    x: number;
+    y: number;
+    w: number;
+    d: number;
+    rot: number;
+    status: "available";
+  }> = [];
 
-    // Zone BB stalls
-    { id: "bb-01", code: "BB-A01", zone: "BB", x: 15, y: 35, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "bb-02", code: "BB-A02", zone: "BB", x: 30, y: 35, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "bb-03", code: "BB-A03", zone: "BB", x: 45, y: 35, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "bb-04", code: "BB-A04", zone: "BB", x: 60, y: 35, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "bb-05", code: "BB-A05", zone: "BB", x: 75, y: 35, w: 10, d: 10, rot: 0, status: "available" as const },
+  // Zone PG stalls (48 total: 30 top run + 18 left run)
+  for (let i = 1; i <= 30; i++) {
+    const code = `PG-A${String(i).padStart(2, "0")}`;
+    allStalls.push({
+      id: `pg-a-${i}`,
+      code,
+      zone: "PG",
+      x: 16 + (i - 1) * 10,
+      y: 0,
+      w: 10,
+      d: 10,
+      rot: 0,
+      status: "available",
+    });
+  }
+  for (let i = 1; i <= 18; i++) {
+    const code = `PG-B${String(i).padStart(2, "0")}`;
+    allStalls.push({
+      id: `pg-b-${i}`,
+      code,
+      zone: "PG",
+      x: 6,
+      y: (i - 1) * 10,
+      w: 10,
+      d: 10,
+      rot: 0,
+      status: "available",
+    });
+  }
 
-    // Zone AG stalls
-    { id: "ag-01", code: "AG-A01", zone: "AG", x: 15, y: 30, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "ag-02", code: "AG-A02", zone: "AG", x: 30, y: 30, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "ag-03", code: "AG-A03", zone: "AG", x: 45, y: 30, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "ag-04", code: "AG-A04", zone: "AG", x: 60, y: 30, w: 10, d: 10, rot: 0, status: "available" as const },
-    { id: "ag-05", code: "AG-A05", zone: "AG", x: 75, y: 30, w: 10, d: 10, rot: 0, status: "available" as const },
-  ];
+  // Zone BB stalls (50 total: 25 left run + 25 right run)
+  for (let i = 1; i <= 25; i++) {
+    const code = `BB-A${String(i).padStart(2, "0")}`;
+    allStalls.push({
+      id: `bb-a-${i}`,
+      code,
+      zone: "BB",
+      x: 16,
+      y: 12 + (i - 1) * 10,
+      w: 10,
+      d: 10,
+      rot: 0,
+      status: "available",
+    });
+  }
+  for (let i = 1; i <= 25; i++) {
+    const code = `BB-B${String(i).padStart(2, "0")}`;
+    allStalls.push({
+      id: `bb-b-${i}`,
+      code,
+      zone: "BB",
+      x: 72,
+      y: 12 + (i - 1) * 10,
+      w: 10,
+      d: 10,
+      rot: 0,
+      status: "available",
+    });
+  }
 
   return {
     asOf: now,

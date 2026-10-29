@@ -619,13 +619,17 @@ on conflict (edition_id) do update set
   booking_enabled = true,
   require_team_approval = false;
 
--- Base Event Zones
-insert into booking.zones (edition_id, code, name, extent_width_ft, extent_depth_ft, inventory_status, source_ref)
+-- Base Event Zones with exact landmarks from PDF layout
+insert into booking.zones (edition_id, code, name, extent_width_ft, extent_depth_ft, landmarks, inventory_status, source_ref)
 values
-  (2026, 'PG', 'Play Ground', 338, 402, 'approved', 'master'),
-  (2026, 'BB', 'Basketball Ground', 101, 305, 'approved', 'master'),
-  (2026, 'AG', 'Outside Agricultural Gate', 150, 150, 'approved', 'master')
-on conflict (edition_id, code) do update set inventory_status = 'approved';
+  (2026, 'PG', 'Playground GIET University', 338, 402, '[{"label":"67 FT Stage","kind":"stage","x":2,"y":180,"w":14,"d":67},{"label":"FIELD ENTRY","kind":"entry","x":0,"y":250,"w":20,"d":15},{"label":"135 FT OPEN SPACE TOWARDS AGRICULTURE LAND","kind":"open_space","x":2,"y":270,"w":35,"d":125},{"label":"HELIPAD","kind":"restricted","x":220,"y":305,"w":105,"d":85}]'::jsonb, 'approved', 'master'),
+  (2026, 'BB', 'Rang Manch / Basketball Ground', 101, 305, '[{"label":"RANG MANCH (101 FT)","kind":"stage","x":25,"y":0,"w":51,"d":18},{"label":"MECHANICAL ROAD 305 FT","kind":"road","x":2,"y":15,"w":10,"d":260},{"label":"ENTRY","kind":"entry","x":44,"y":18,"w":4,"d":260},{"label":"EXIT","kind":"exit","x":53,"y":18,"w":4,"d":260},{"label":"ISF STALL","kind":"reserved","x":12,"y":265,"w":30,"d":18},{"label":"MEETING ROOM","kind":"reserved","x":52,"y":265,"w":45,"d":18},{"label":"BUS-STAND ROAD 101 FT","kind":"road","x":0,"y":286,"w":101,"d":19}]'::jsonb, 'approved', 'master')
+on conflict (edition_id, code) do update set
+  name = excluded.name,
+  extent_width_ft = excluded.extent_width_ft,
+  extent_depth_ft = excluded.extent_depth_ft,
+  landmarks = excluded.landmarks,
+  inventory_status = 'approved';
 
 -- Admin users for /admin portal
 alter table if exists app_auth.admin_users add column if not exists password_hash text;
@@ -661,42 +665,31 @@ select id, p.perm, 'schema-init'
  where email = 'comapny230@gmail.com'
 on conflict do nothing;
 
--- Starter bookable stalls for manual testing (5 in Play Ground, 5 in Basketball Ground, 5 in Agricultural Gate)
+-- Stalls from PDF layout: 48 in Playground GIET University, 50 in Basketball Ground
+-- PG-A01 to PG-A30 (Top horizontal run of 30 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, s.code, 10, 10, s.x, s.y, 0, 'approved', 'starter'
-from booking.zones z
-cross join (values
-  ('PG-A01', 20.0, 30.0),
-  ('PG-A02', 35.0, 30.0),
-  ('PG-A03', 50.0, 30.0),
-  ('PG-A04', 65.0, 30.0),
-  ('PG-A05', 80.0, 30.0)
-) as s(code, x, y)
+select 2026, z.id, 'PG-A' || to_char(i, 'FM00'), 10, 10, 16 + (i - 1) * 10, 0, 0, 'approved', 'pdf-map'
+from booking.zones z, generate_series(1, 30) as i
 where z.code = 'PG' and z.edition_id = 2026
-on conflict (edition_id, code) do nothing;
+on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
 
+-- PG-B01 to PG-B18 (Left vertical run of 18 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, s.code, 10, 10, s.x, s.y, 0, 'approved', 'starter'
-from booking.zones z
-cross join (values
-  ('BB-A01', 15.0, 25.0),
-  ('BB-A02', 30.0, 25.0),
-  ('BB-A03', 45.0, 25.0),
-  ('BB-A04', 60.0, 25.0),
-  ('BB-A05', 75.0, 25.0)
-) as s(code, x, y)
+select 2026, z.id, 'PG-B' || to_char(i, 'FM00'), 10, 10, 6, (i - 1) * 10, 0, 'approved', 'pdf-map'
+from booking.zones z, generate_series(1, 18) as i
+where z.code = 'PG' and z.edition_id = 2026
+on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
+
+-- BB-A01 to BB-A25 (Left vertical run of 25 stalls)
+insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
+select 2026, z.id, 'BB-A' || to_char(i, 'FM00'), 10, 10, 16, 12 + (i - 1) * 10, 0, 'approved', 'pdf-map'
+from booking.zones z, generate_series(1, 25) as i
 where z.code = 'BB' and z.edition_id = 2026
-on conflict (edition_id, code) do nothing;
+on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
 
+-- BB-B01 to BB-B25 (Right vertical run of 25 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, s.code, 10, 10, s.x, s.y, 0, 'approved', 'starter'
-from booking.zones z
-cross join (values
-  ('AG-A01', 10.0, 20.0),
-  ('AG-A02', 25.0, 20.0),
-  ('AG-A03', 40.0, 20.0),
-  ('AG-A04', 55.0, 20.0),
-  ('AG-A05', 70.0, 20.0)
-) as s(code, x, y)
-where z.code = 'AG' and z.edition_id = 2026
-on conflict (edition_id, code) do nothing;
+select 2026, z.id, 'BB-B' || to_char(i, 'FM00'), 10, 10, 72, 12 + (i - 1) * 10, 0, 'approved', 'pdf-map'
+from booking.zones z, generate_series(1, 25) as i
+where z.code = 'BB' and z.edition_id = 2026
+on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
