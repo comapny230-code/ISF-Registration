@@ -106,7 +106,11 @@ export interface MailConfig {
   transport: "smtp" | "log";
   from: string;
   replyTo?: string;
-  smtp?: { host: string; port: number; secure: boolean; auth?: { user: string; pass: string } };
+  /**
+   * secure: implicit TLS (port 465). requireTLS: on other ports, refuse to continue (and so to
+   * send the password) unless the server upgrades with STARTTLS; always set in staging/production.
+   */
+  smtp?: { host: string; port: number; secure: boolean; requireTLS: boolean; auth?: { user: string; pass: string } };
   /** null in production; otherwise only matching recipients receive mail. */
   recipientAllowlist: string[] | null;
 }
@@ -151,10 +155,17 @@ export function getMailConfig(env: Env = process.env): MailConfig {
     if ((appEnv === "local" || appEnv === "test") && !isLocalHost(host)) {
       throw new ConfigError("SMTP_HOST", "must be a local mail catcher in local and test");
     }
+    const deployed = appEnv === "staging" || appEnv === "production";
+    // Provider submission ports only: 465 (TLS) or 587/2525 (STARTTLS). Port 25 is blocked on
+    // most hosting (including Vercel) and is not meant for authenticated submission.
+    if (deployed && ![465, 587, 2525].includes(port)) {
+      throw new ConfigError("SMTP_PORT", "must be 465 (TLS), 587 or 2525 (STARTTLS) in staging and production");
+    }
     smtp = {
       host,
       port,
       secure: port === 465,
+      requireTLS: deployed && port !== 465,
       auth: user && pass ? { user, pass: pass.replace(/\s+/g, "") } : undefined,
     };
   }

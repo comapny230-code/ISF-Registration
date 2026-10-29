@@ -55,17 +55,60 @@ export async function sendMail(message: OutgoingMail): Promise<boolean> {
   }
 
   const smtp = config.smtp!;
-  const transporter = nodemailer.createTransport({
+  for (let attempt = 1; ; attempt++) {
+    const transporter = createSmtpTransport(smtp);
+    try {
+      await transporter.sendMail(envelope);
+      return true;
+    } catch (err) {
+      if (attempt < SMTP_MAX_ATTEMPTS && isTransientSmtpError(err)) {
+        console.warn("[MAIL] Temporary SMTP failure; retrying once.", { code: (err as any)?.code, responseCode: (err as any)?.responseCode });
+        await new Promise((resolve) => setTimeout(resolve, SMTP_RETRY_DELAY_MS));
+        continue;
+      }
+      throw redactedSmtpError(err, smtp);
+    } finally {
+      transporter.close();
+    }
+  }
+}
+
+type SmtpSettings = NonNullable<ReturnType<typeof getMailConfig>["smtp"]>;
+
+/** Two attempts at most: sign-in and registration codes expire, so a long retry loop does not help. */
+const SMTP_MAX_ATTEMPTS = 2;
+const SMTP_RETRY_DELAY_MS = 1000;
+
+function createSmtpTransport(smtp: SmtpSettings) {
+  return nodemailer.createTransport({
     host: smtp.host,
     port: smtp.port,
     secure: smtp.secure,
+    requireTLS: smtp.requireTLS,
+    // Certificates are always verified (nodemailer's default); never offer anything below TLS 1.2.
+    tls: { minVersion: "TLSv1.2" },
     auth: smtp.auth,
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000,
   });
-  await transporter.sendMail(envelope);
-  return true;
+}
+
+/** 4xx replies and dropped connections are worth one more try; 5xx (rejected, bad sign-in) are not. */
+function isTransientSmtpError(err: unknown): boolean {
+  const e = err as { code?: string; responseCode?: number };
+  if (typeof e?.responseCode === "number") return e.responseCode >= 400 && e.responseCode < 500;
+  return ["ETIMEDOUT", "ECONNECTION", "ECONNRESET", "ESOCKET", "EDNS"].includes(e?.code ?? "");
+}
+
+/** Keeps the server's message and codes for the logs but never the password. */
+function redactedSmtpError(err: unknown, smtp: SmtpSettings): Error {
+  const e = err as { message?: string; code?: string; responseCode?: number };
+  const pass = smtp.auth?.pass;
+  const message = String(e?.message ?? err);
+  const safe = new Error(pass ? message.split(pass).join("[redacted]") : message);
+  Object.assign(safe, { name: "SmtpError", code: e?.code, responseCode: e?.responseCode });
+  return safe;
 }
 
 /**
@@ -76,24 +119,14 @@ export async function verifyMailTransport(env: Record<string, string | undefined
   const config = getMailConfig(env);
   if (config.transport === "log") return { transport: "log", detail: "log transport: messages are written to the server log; nothing to verify" };
   const smtp = config.smtp!;
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: smtp.auth,
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000,
-  });
+  const transporter = createSmtpTransport(smtp);
   try {
     await transporter.verify();
   } catch (err: any) {
-    const pass = smtp.auth?.pass;
-    const message = String(err?.message ?? err);
-    throw new Error(`SMTP check failed (${err?.code ?? "error"}): ${pass ? message.split(pass).join("[redacted]") : message}`);
+    throw new Error(`SMTP check failed (${err?.code ?? "error"}): ${redactedSmtpError(err, smtp).message}`);
   } finally {
     transporter.close();
   }
-  return { transport: "smtp", detail: `connected and signed in to ${smtp.host}:${smtp.port}${smtp.secure ? " (TLS)" : " (STARTTLS)"}` };
+  return { transport: "smtp", detail: `connected and signed in to ${smtp.host}:${smtp.port}${smtp.secure ? " (TLS)" : smtp.requireTLS ? " (STARTTLS required)" : " (no TLS required: local only)"}` };
 }
 

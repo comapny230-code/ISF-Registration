@@ -25,3 +25,11 @@ playwright-report/
 
 # Load-test fixtures (contain session tokens)
 .load/
+
+# Local tool configuration (MCP server links, per-user Claude settings)
+.mcp.json
+.claude/settings.local.json
+
+# Organisers' source venue documents: kept out of git (hashes are recorded in docs/inventory)
+docs/Map Startup.docx
+docs/Map Startup (18-10-2026).pdf

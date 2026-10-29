@@ -78,6 +78,23 @@ describe("inventory activation migration", () => {
     expect(() => generateActivationMigrationSql(missing, { sourceRef: "x", approvalRef: APPROVAL })).toThrow(/PG-A02: approved without coordinates/);
   });
 
+  it("refuses the draft layout's unconfirmed positions and an unresolved run-count conflict", () => {
+    const draftPath = path.resolve(__dirname, "../../../docs/inventory/DRAFT_venue_layout_from_pdf.csv");
+    const draft = parseCsv(readFileSync(draftPath, "utf8")).rows;
+    // Flipping approval on the draft as-is must not activate anything.
+    const flipped = draft.map((r) => (r.provisional_stall_code === "PG-A01" ? { ...r, approval_status: "APPROVED - test", bookable: "true" } : r));
+    expect(() => generateActivationMigrationSql(flipped, { sourceRef: "x", approvalRef: APPROVAL })).toThrow(/PG-A01: approved with a DRAFT position/);
+
+    const confirmed = { position_confidence: "confirmed on site - test, 2026-10-29", approval_status: "APPROVED - test", bookable: "true" };
+    const conflict = draft.map((r) => (r.provisional_stall_code === "BB-B01" ? { ...r, ...confirmed } : r));
+    expect(() => generateActivationMigrationSql(conflict, { sourceRef: "x", approvalRef: APPROVAL })).toThrow(/BB-B01: run BB-B still has an unresolved count conflict/);
+
+    const resolved = draft.map((r) =>
+      r.provisional_stall_code === "BB-B01" ? { ...r, ...confirmed, count_confidence: "decided: 25 stalls (PDF) - test, 2026-10-29" } : r
+    );
+    expect(generateActivationMigrationSql(resolved, { sourceRef: "x", approvalRef: APPROVAL })).toContain("'BB-B01'");
+  });
+
   it("the provisional repository inventory itself has no approved stall (nothing can be activated by accident)", () => {
     expect(validateInventory(header, rows).summary.approved).toBe(0);
   });

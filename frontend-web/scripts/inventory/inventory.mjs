@@ -283,6 +283,16 @@ export function generateActivationMigrationSql(rows, { sourceRef, approvalRef })
   if (approved.length === 0) throw new Error("no rows are APPROVED; nothing to activate");
   for (const r of approved) {
     if (["x_ft", "y_ft", "rotation_deg"].some((c) => isBlank(r[c]))) throw new Error(`${r.provisional_stall_code}: approved without coordinates`);
+    // The draft layout's positions are a schematic read from the PDF, not measurements: approving
+    // a row must come with confirming its position (docs/inventory/README.md, "How to approve").
+    if (/^\s*DRAFT\b/i.test(r.position_confidence ?? "")) {
+      throw new Error(`${r.provisional_stall_code}: approved with a DRAFT position; set position_confidence to how it was confirmed (e.g. "confirmed on site - <name>, <date>")`);
+    }
+    // An unresolved count conflict (e.g. Basketball Ground right-hand run: DOCX 28 vs PDF 25)
+    // means the organisers have not yet said which stalls exist.
+    if (/^\s*CONFLICT\b/i.test(r.count_confidence ?? "")) {
+      throw new Error(`${r.provisional_stall_code}: run ${r.run_code} still has an unresolved count conflict (${r.count_confidence}); record the decision in count_confidence first`);
+    }
   }
   const ref = `${String(approvalRef).trim()}; ${sourceRef}`;
   const zones = [...new Set(approved.map((r) => r.zone_code))];

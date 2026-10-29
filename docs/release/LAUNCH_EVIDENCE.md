@@ -1,7 +1,7 @@
-# Launch evidence: Book Your Stall
+| LG-07 | Inventory approved and signed | **Open** | [ORG] | Validated 2026-10-29: 107 stalls, 0 approved/bookable; 98 with draft positions, 9 without (BB-B26–B28, AG ×6). `activate` now refuses DRAFT positions and unresolved count conflicts. Approval requirements: `docs/inventory/README.md`. Open: BB-B 25 vs 28, AG used?, on-site positions. || LG-06 | Email provider live (SPF/DKIM/DMARC) | **Partly** | [ORG] + [INFRA] | Code complete and tested against a local SMTP server (sign-in, delivery and headers, allowlist, one retry on 4xx only, password redaction). STARTTLS is now required on 587/2525 in staging/production, other ports are refused, TLS ≥ 1.2. `mail:check -- --dns` checks SPF/DMARC/DKIM. Still needed: provider and domain chosen (B-06), DNS records, credentials in Vercel, staging test. || LG-04 | Data API cannot reach registration data | **Partly** | [INFRA] | Live check of `ddrremsyzozutyxbxigf` (read-only, 2026-10-29): RLS on for all 10 tables, **but `anon`/`authenticated` still hold SELECT/INSERT/UPDATE/DELETE on all of them**, and `public.rls_auto_enable()` (SECURITY DEFINER) is executable by `anon`. No migration applied (no `schema_migrations`, no `app_auth`/`booking`). `public` matches 0001 exactly, so baseline 0001 is safe. New **0009** revokes function EXECUTE (tested; event-trigger case proven by hand with a superuser in a scratch DB). [INFRA]: grant report, baseline 0001, apply 0002–0009, verify. || LG-01 | Leaked credentials rotated | **Open** | [INFRA] | Re-scanned 2026-10-29 (all branches, all commits): **5 secrets**: 1 Supabase DB password (used with `ddrremsyzozutyxbxigf` **and a second project `wdes…`**), 2 Gmail app passwords, 2 ImageKit private keys, all on `origin/main`. Fingerprints, order and "old credential rejected" checks: `docs/runbooks/credential-rotation.md`. Needs the signed rotation note. |# Launch evidence: Book Your Stall
 
 Status of every launch gate in `docs/STALL_BOOKING_FINAL_SPEC.md` §9.9. **Booking must not open until every gate is "Met" with evidence attached.**
-Branch `feature/book-your-stall`; local checkpoints `f433484` (P1–P3), `477b469` (P4), `201e622` (P5); P6 uncommitted at the time of writing.
+Branch `feature/book-your-stall`; local checkpoints `42a8d58` (P6), and earlier `f433484` (P1–P3), `477b469` (P4), `201e622` (P5); P6 uncommitted at the time of writing.
 
 Legend: **Met** = evidence attached · **Partly** = done locally, staging or human step outstanding · **Open** = not started or blocked.
 
@@ -62,3 +62,9 @@ Legend: **Met** = evidence attached · **Partly** = done locally, staging or hum
 - Optional Cloudflare Turnstile on registration (`TURNSTILE_SECRET_KEY` + `TURNSTILE_SITE_KEY`, read at runtime); off until both are set; fails closed if Cloudflare is unreachable.
 - Registration no longer runs runtime DDL on a database managed by the migration runner (R-08 partial).
 
+
+## Go-live blocker pass (2026-10-29, uncommitted on top of `42a8d58`)
+
+- Typecheck clean; **324 unit, database, integration and race tests pass** (34 files, one full run, including the new mail, DNS, 0009 and inventory-activation tests); **21/21 Playwright** (installed Edge, desktop + mobile); `next build` OK; committed seed up to date.
+- gitleaks 8.21.2 (checksum-verified): working tree clean apart from git-ignored `.next/` build keys and `node_modules` docs; history findings unchanged (credential-rotation runbook).
+- Supabase checks were read-only through MCP (`read_only=true`); nothing was applied to the remote project.

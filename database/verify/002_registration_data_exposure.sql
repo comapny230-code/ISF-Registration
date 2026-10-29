@@ -18,4 +18,17 @@ union all
 select 'row-level security enabled on public.' || c.relname, c.relrowsecurity,
        case when c.relrowsecurity then 'RLS enabled' else 'RLS disabled' end
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
- where n.nspname = 'public' and c.relkind in ('r', 'p');;
+ where n.nspname = 'public' and c.relkind in ('r', 'p')
+
+-- No function in public may be callable through the Data API's RPC endpoint (migration 0009).
+-- PUBLIC is checked everywhere; anon and authenticated only where those roles exist.
+union all
+select coalesce(r.rolname, 'PUBLIC') || ' cannot execute public.' || p.oid::regprocedure::text,
+       not exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                    where a.privilege_type = 'EXECUTE' and (a.grantee = 0 or a.grantee = r.oid)),
+       case when p.prosecdef then 'SECURITY DEFINER' else 'SECURITY INVOKER' end
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  cross join (select null::oid as oid, null::name as rolname
+              union all select oid, rolname from pg_roles where rolname in ('anon', 'authenticated')) r
+ where n.nspname = 'public' and p.prokind in ('f', 'p');;

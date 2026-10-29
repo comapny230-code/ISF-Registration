@@ -113,6 +113,19 @@ describe("CFG-01 mail", () => {
     expect(getMailConfig(production).recipientAllowlist).toBeNull();
   });
 
+  it("requires STARTTLS on submission ports in staging/production and rejects other ports", () => {
+    expect(getMailConfig({ ...production, SMTP_PORT: "587" }).smtp).toMatchObject({ port: 587, secure: false, requireTLS: true });
+    expect(getMailConfig({ ...production, SMTP_PORT: "2525" }).smtp).toMatchObject({ secure: false, requireTLS: true });
+    expect(getMailConfig(production).smtp).toMatchObject({ secure: true, requireTLS: false });
+    expectConfigError(() => getMailConfig({ ...production, SMTP_PORT: "25" }), "SMTP_PORT");
+    expectConfigError(
+      () => getMailConfig({ ...production, APP_ENV: "staging", SMTP_PORT: "2526", MAIL_RECIPIENT_ALLOWLIST: "@example.test" }),
+      "SMTP_PORT"
+    );
+    // A local mail catcher on any port, without TLS.
+    expect(getMailConfig(local).smtp).toMatchObject({ port: 1025, secure: false, requireTLS: false });
+  });
+
   it("keeps local mail on a local catcher and log transport out of staging", () => {
     expectConfigError(() => getMailConfig({ ...local, SMTP_HOST: "smtp.gmail.com" }), "SMTP_HOST");
     expectConfigError(
