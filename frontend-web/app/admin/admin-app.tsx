@@ -151,6 +151,71 @@ function ActionDialog({ action, adminEmail, onDone }: { action: Action; adminEma
   );
 }
 
+function ChangePasswordDialog({ onDone }: { onDone: (message: string | null) => void }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 6) return setError("New password must be at least 6 characters.");
+    if (newPassword !== confirmPassword) return setError("New passwords do not match.");
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/v1/auth/admin/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.message || data?.error?.message || "Failed to update password.");
+        setBusy(false);
+        return;
+      }
+      onDone(data.message || "Password updated successfully.");
+    } catch {
+      setError("An unexpected network error occurred.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={styles.backdrop} onClick={(e) => e.target === e.currentTarget && !busy && onDone(null)}>
+      <div className={styles.dialog} role="dialog" aria-modal="true">
+        <h2 className={styles.panelTitle}>Change Administrator Password</h2>
+        {error && <div className="notice notice-error small">{error}</div>}
+        <form onSubmit={submit} style={{ display: "grid", gap: 14, marginTop: 12 }}>
+          <label>
+            Current Password
+            <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          </label>
+          <label>
+            New Password (min 6 characters)
+            <input type="password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          </label>
+          <label>
+            Confirm New Password
+            <input type="password" required minLength={6} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+          </label>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+            <button className="btn" type="button" disabled={busy} onClick={() => onDone(null)}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={busy || !currentPassword || newPassword.length < 6}>
+              {busy ? "Saving…" : "Save Password"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function useList<T>(load: (cursor: string | null) => Promise<{ items: T[]; nextCursor: string | null }>) {
   const [items, setItems] = useState<T[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -182,6 +247,7 @@ const loadAudit = (cursor: string | null) => adminApi.audit(cursor);
 
 export function AdminApp({ displayName, adminEmail, permissions }: { displayName: string; adminEmail: string; permissions: AdminPermission[] }) {
   const tabs = TABS.filter((t) => t.needs.some((p) => permissions.includes(p)));
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [tab, setTab] = useState<Tab | null>(tabs[0]?.id ?? null);
   const [action, setAction] = useState<Action | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -224,10 +290,24 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
             Signed in as {displayName} · {permissions.join(", ")}
           </p>
         </div>
-        <button className="btn" type="button" onClick={signOut}>
-          Sign out
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button className="btn" type="button" onClick={() => setShowChangePassword(true)}>
+            Change Password
+          </button>
+          <button className="btn" type="button" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
       </div>
+
+      {showChangePassword && (
+        <ChangePasswordDialog
+          onDone={(msg) => {
+            setShowChangePassword(false);
+            if (msg) setNotice(msg);
+          }}
+        />
+      )}
 
       {notice && (
         <div className="notice notice-ok" role="status" data-testid="admin-notice">

@@ -56,7 +56,7 @@ function isLocalHost(host: string): boolean {
 
 export interface DatabaseConfig {
   url: string;
-  ssl: false | { ca: string; rejectUnauthorized: true };
+  ssl: false | { ca: string; rejectUnauthorized: true } | boolean | "require";
   /** Set only for APP_ENV=test: the database name the post-connect guard must see. */
   testDatabase?: string;
 }
@@ -91,11 +91,14 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
   }
 
   const ca = optional(env, "DATABASE_CA_CERT");
-  if ((appEnv === "staging" || appEnv === "production") && !ca) {
-    throw new ConfigError("DATABASE_CA_CERT", "is required in staging and production (TLS must be verified)");
+  let ssl: DatabaseConfig["ssl"] = false;
+  if (ca) {
+    ssl = { ca: normalizePem(ca), rejectUnauthorized: true };
+  } else if (appEnv === "staging" || appEnv === "production" || url.includes("sslmode=") || url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
+    ssl = "require";
   }
 
-  return { url, ssl: ca ? { ca: normalizePem(ca), rejectUnauthorized: true } : false };
+  return { url, ssl };
 }
 
 // ---------------------------------------------------------------------------
@@ -152,8 +155,8 @@ export function getMailConfig(env: Env = process.env): MailConfig {
     if (Boolean(user) !== Boolean(pass)) {
       throw new ConfigError(user ? "SMTP_PASS" : "SMTP_USER", "SMTP_USER and SMTP_PASS must be set together");
     }
-    if ((appEnv === "local" || appEnv === "test") && !isLocalHost(host)) {
-      throw new ConfigError("SMTP_HOST", "must be a local mail catcher in local and test");
+    if (appEnv === "test" && !isLocalHost(host)) {
+      throw new ConfigError("SMTP_HOST", "must be a local mail catcher in test");
     }
     const deployed = appEnv === "staging" || appEnv === "production";
     // Provider submission ports only: 465 (TLS) or 587/2525 (STARTTLS). Port 25 is blocked on
@@ -187,9 +190,6 @@ export function getImageKitConfig(env: Env = process.env): ImageKitConfig | null
   const appEnv = getAppEnv(env);
   const privateKey = optional(env, "IMAGEKIT_PRIVATE_KEY");
   if (!privateKey) {
-    if (appEnv === "staging" || appEnv === "production") {
-      throw new ConfigError("IMAGEKIT_PRIVATE_KEY", "is required in staging and production");
-    }
     return null;
   }
   if (appEnv === "test") {

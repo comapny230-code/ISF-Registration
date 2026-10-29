@@ -3,7 +3,6 @@ import Link from "next/link";
 import Image from "next/image";
 import "./globals.css";
 import { OrganizerLogos } from "./organizer-logos";
-import { getFeatureFlags } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "ISF · Startup Jathara @ Dandakaranya",
@@ -17,7 +16,6 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const { bookingUi } = getFeatureFlags();
   return (
     <html lang="en-IN">
       <body>
@@ -43,14 +41,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
 
             <div className="header-right">
-              {bookingUi && (
-                <Link href="/book-your-stall" className="nav-link" style={{ whiteSpace: "nowrap" }}>
-                  Book your stall
-                </Link>
-              )}
-              <Link href="/register" className="nav-btn-register">
-                <span>Register</span>
-                <span className="btn-arrow">→</span>
+              <Link
+                href="/"
+                className="nav-btn-home"
+                aria-label="Home"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+                <span>Home</span>
               </Link>
             </div>
           </div>

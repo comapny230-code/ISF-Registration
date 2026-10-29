@@ -172,6 +172,15 @@ export const v = {
     if (typeof value !== "boolean") throw new HttpError(400, "VALIDATION", `${field} must be true or false.`, { field });
     return value;
   },
+  string:
+    (min = 1, max = 500) =>
+    (value: unknown, field: string): string => {
+      const text = typeof value === "string" ? value.trim() : "";
+      if (text.length < min || text.length > max) {
+        throw new HttpError(400, "VALIDATION", `${field} must be between ${min} and ${max} characters.`, { field });
+      }
+      return text;
+    },
   pattern:
     (re: RegExp) =>
     (value: unknown, field: string): string => {

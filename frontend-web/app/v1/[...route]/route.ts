@@ -16,6 +16,8 @@ import { checkFormToken, checkHoneypot } from "@/lib/registration/form-guard";
 import {
   AadhaarAlreadyRegisteredError,
   AlreadyRegisteredError,
+  PanAlreadyRegisteredError,
+  PhoneAlreadyRegisteredError,
   persistRegistration,
   type RegistrationInput,
 } from "@/lib/registration/persist";
@@ -258,6 +260,9 @@ async function ensureTables(sql: postgres.Sql) {
       alter table user_accounts add column if not exists project_report_url text;
       alter table user_accounts add column if not exists aadhar_number text;
       alter table user_accounts add column if not exists pan_number text;
+      alter table user_accounts add column if not exists id_consent_given boolean default false;
+      alter table user_accounts add column if not exists id_consent_at timestamptz;
+      alter table user_accounts add column if not exists id_consent_ip text;
 
       alter table startups add column if not exists project_details text;
       alter table startups add column if not exists project_report_url text;
@@ -266,11 +271,28 @@ async function ensureTables(sql: postgres.Sql) {
       alter table startup_team_leaders add column if not exists project_report_url text;
       alter table startup_team_leaders add column if not exists aadhar_number text;
       alter table startup_team_leaders add column if not exists pan_number text;
+      alter table startup_team_leaders add column if not exists id_consent_given boolean default false;
+      alter table startup_team_leaders add column if not exists id_consent_at timestamptz;
 
       alter table student_innovators add column if not exists project_details text;
       alter table student_innovators add column if not exists project_report_url text;
       alter table student_innovators add column if not exists aadhar_number text;
       alter table student_innovators add column if not exists pan_number text;
+      alter table student_innovators add column if not exists id_consent_given boolean default false;
+      alter table student_innovators add column if not exists id_consent_at timestamptz;
+
+      -- Anti-overwrite uniqueness indexes across all registration credentials
+      create unique index if not exists uq_startup_team_leaders_email_edition on startup_team_leaders(lower(email), coalesce(edition_id, 2026));
+      create unique index if not exists uq_student_innovators_email_edition on student_innovators(lower(email), coalesce(edition_id, 2026));
+      create unique index if not exists uq_startup_team_leaders_aadhar on startup_team_leaders(aadhar_number, coalesce(edition_id, 2026)) where aadhar_number is not null;
+      create unique index if not exists uq_student_innovators_aadhar on student_innovators(aadhar_number, coalesce(edition_id, 2026)) where aadhar_number is not null;
+      create unique index if not exists uq_startup_team_leaders_pan on startup_team_leaders(upper(pan_number), coalesce(edition_id, 2026)) where pan_number is not null;
+      create unique index if not exists uq_student_innovators_pan on student_innovators(upper(pan_number), coalesce(edition_id, 2026)) where pan_number is not null;
+      create unique index if not exists uq_startup_team_leaders_phone on startup_team_leaders(mobile, coalesce(edition_id, 2026));
+      create unique index if not exists uq_student_innovators_phone on student_innovators(mobile, coalesce(edition_id, 2026));
+
+      -- Ensure admin password_hash column exists
+      alter table app_auth.admin_users add column if not exists password_hash text;
     `);
   } catch (err) {
     console.warn("[DB SCHEMA ENSURE]", err);
@@ -285,10 +307,6 @@ async function handleRequest(request: Request) {
   // POST /v1/auth/register or /v1/public/signup
   if ((path.includes("/auth/register") || path.includes("/public/signup")) && method === "POST") {
     try {
-      const sql = await getDb();
-      await consumeRateLimit(sql, LIMITS.registrationPerIp, clientAddress(request));
-      await ensureTables(sql);
-
       let body: any;
       try {
         body = JSON.parse(await readLimitedText(request));
@@ -303,6 +321,22 @@ async function handleRequest(request: Request) {
       checkHoneypot(body);
       checkFormToken(body.formToken);
       await checkCaptcha(body.captchaToken, clientAddress(request));
+
+      // Explicit voluntary consent for Aadhaar & PAN verification under DPDP Act / UIDAI compliance
+      const consentAadhaarPan = body.consentAadhaarPan === true;
+      if (!consentAadhaarPan) {
+        return Response.json(
+          {
+            code: "CONSENT_REQUIRED",
+            message: "Voluntary statutory consent for Aadhaar & PAN verification is required to complete registration.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const sql = await getDb();
+      await consumeRateLimit(sql, LIMITS.registrationPerIp, clientAddress(request));
+      await ensureTables(sql);
       const email = String(body.email || "").toLowerCase().trim();
       const fullName = String(body.fullName || "").trim();
       const password = typeof body.password === "string" ? body.password.trim() : "";
@@ -466,6 +500,8 @@ async function handleRequest(request: Request) {
         projectReportUrl: storedProjectReport,
         aadharNumber,
         panNumber,
+        idConsentGiven: true,
+        idConsentIp: clientAddress(request),
         city,
         state,
         country,
@@ -492,13 +528,13 @@ async function handleRequest(request: Request) {
           startSession: sameOrigin,
           replacedToken: sameOrigin ? sessionTokenFrom(request, "leader") : null,
         }));
-      } catch (err) {
+      } catch (err: any) {
         if (err instanceof AlreadyRegisteredError) {
           return Response.json(
             {
               code: "ALREADY_REGISTERED",
               message:
-                "This email address is already registered. To change your registration details, please contact the organisers.",
+                "This email address already has a registered team or delegate. To protect applicant data, existing registrations cannot be overwritten. Please contact the organisers if you require updates.",
             },
             { status: 409 }
           );
@@ -507,7 +543,34 @@ async function handleRequest(request: Request) {
           return Response.json(
             {
               code: "AADHAAR_ALREADY_REGISTERED",
-              message: "This Aadhaar number is already used by another registration. If this is a mistake, please contact the organisers.",
+              message: "This Aadhaar number is already associated with an existing registration. To prevent identity duplication, existing registrations cannot be overwritten.",
+            },
+            { status: 409 }
+          );
+        }
+        if (err instanceof PanAlreadyRegisteredError) {
+          return Response.json(
+            {
+              code: "PAN_ALREADY_REGISTERED",
+              message: "This PAN number is already associated with an existing registration and cannot be overwritten.",
+            },
+            { status: 409 }
+          );
+        }
+        if (err instanceof PhoneAlreadyRegisteredError) {
+          return Response.json(
+            {
+              code: "PHONE_ALREADY_REGISTERED",
+              message: "This primary phone number is already registered for another delegate leader and cannot be overwritten.",
+            },
+            { status: 409 }
+          );
+        }
+        if (err?.code === "23505") {
+          return Response.json(
+            {
+              code: "REGISTRATION_CONFLICT",
+              message: "A registration with these unique credentials (email, phone, Aadhaar, or PAN) already exists. Overwriting is not permitted.",
             },
             { status: 409 }
           );
@@ -570,6 +633,16 @@ async function handleRequest(request: Request) {
       if (err instanceof ConfigError || err instanceof TestDatabaseGuardError) {
         return Response.json(
           { message: "Registration is temporarily unavailable. Please try again later.", requestId },
+          { status: 503 }
+        );
+      }
+      if (err?.code === "ECONNREFUSED" || err?.name === "AggregateError" || err?.message?.includes("connection refused")) {
+        return Response.json(
+          {
+            code: "DATABASE_UNAVAILABLE",
+            message: "Database connection could not be established. Please check your PostgreSQL or Supabase DATABASE_URL.",
+            requestId,
+          },
           { status: 503 }
         );
       }

@@ -1,7 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
+import { getFeatureFlags } from "@/lib/config";
 
 export default function Home() {
+  const { bookingUi } = getFeatureFlags();
+  const showBooking = bookingUi || process.env.NODE_ENV !== "production";
+
   return (
     <section className="hero">
       <div className="hero-emblem">
@@ -26,6 +30,11 @@ export default function Home() {
         <Link href="/register" className="btn btn-primary btn-large">
           Summit Registration →
         </Link>
+        {showBooking && (
+          <Link href="/book-your-stall" className="btn btn-forest btn-large">
+            Book Your Stall →
+          </Link>
+        )}
       </div>
 
       <div className="tracks-ribbon">
