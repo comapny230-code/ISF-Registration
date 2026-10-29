@@ -3,7 +3,6 @@
  * (AUTH-01..08, AUTH-11, AUTH-12; docs/STALL_BOOKING_FINAL_SPEC.md §3, §9.3).
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import * as registerRoute from "@/app/v1/[...route]/route";
 import * as logoutRoute from "@/app/v1/auth/logout/route";
 import * as requestRoute from "@/app/v1/auth/otp/request/route";
 import * as verifyRoute from "@/app/v1/auth/otp/verify/route";
@@ -13,6 +12,7 @@ import { describeLeaderTeam, lockLeaderTeam } from "@/lib/auth/leader";
 import { getDb } from "@/lib/db";
 import { HttpError } from "@/lib/http";
 import { capturedMailForTests } from "@/lib/mail";
+import { nextAadhaar, registerVerified } from "../support/registration";
 import { apiRequest, call, cookiePair } from "../support/http";
 
 const LEADER_COOKIE = "__Host-sj_session";
@@ -24,14 +24,12 @@ async function registerLeader(category = "startup_founder") {
   n += 1;
   const email = `auth-leader${n}@example.test`;
   const memberEmail = `auth-member${n}@example.test`;
-  const res = await registerRoute.POST(
-    apiRequest("/v1/auth/register", {
-      category, teamName: `Auth Team ${n}`, fullName: `Auth Leader ${n}`, email, photoUrl: PHOTO,
-      mobile: "9876543210", altMobile: "9876543211", domain: "Agritech", projectDetails: "Details",
-      city: "Gunupur", state: "Odisha", country: "India", linkedinUrl: "in/x", aadharNumber: "123412341234",
-      members: [{ name: `Member ${n}`, photoUrl: PHOTO, phone: "9123456780", email: memberEmail }],
-    })
-  );
+  const res = await registerVerified({
+    category, teamName: `Auth Team ${n}`, fullName: `Auth Leader ${n}`, email, photoUrl: PHOTO,
+    mobile: "9876543210", altMobile: "9876543211", domain: "Agritech", projectDetails: "Details",
+    city: "Gunupur", state: "Odisha", country: "India", linkedinUrl: "in/x", aadharNumber: nextAadhaar(),
+    members: [{ name: `Member ${n}`, photoUrl: PHOTO, phone: "9123456780", email: memberEmail }],
+  });
   expect(res.status).toBe(200);
   const sql = await getDb();
   const [user] = await sql`select id from user_accounts where email = ${email}`;
@@ -56,11 +54,21 @@ function lastCodeFor(email: string): string {
   return mail.subject.match(/(\d{6})$/)![1];
 }
 
-const requestCode = (email: string, audience = "leader") =>
-  call(requestRoute.POST, apiRequest("/v1/auth/otp/request", { email, audience }));
+/** The binding cookie each email's "browser" received with its code (codes are bound to the requester). */
+const bindings = new Map<string, string>();
+
+async function requestCode(email: string, audience = "leader") {
+  const res = await call(requestRoute.POST, apiRequest("/v1/auth/otp/request", { email, audience }, { cookie: bindings.get(email) }));
+  const binding = cookiePair(res.headers, "__Host-sj_otp");
+  if (binding) bindings.set(email, binding);
+  return res;
+}
 
 const verify = (email: string, code: string, audience = "leader", cookie?: string) =>
-  call(verifyRoute.POST, apiRequest("/v1/auth/otp/verify", { email, audience, code }, { cookie }));
+  call(
+    verifyRoute.POST,
+    apiRequest("/v1/auth/otp/verify", { email, audience, code }, { cookie: [bindings.get(email), cookie].filter(Boolean).join("; ") || undefined })
+  );
 
 async function login(email: string, audience = "leader") {
   expect((await requestCode(email, audience)).status).toBe(202);
@@ -165,11 +173,13 @@ describe("AUTH-02/03 code verification", () => {
     const leader = await registerLeader();
     await requestCode(leader.email);
     const code = lastCodeFor(leader.email);
+    // Registration through the site already started its own short handoff session; count only verification's.
+    const sql = await getDb();
+    const [before] = await sql`select count(*)::int as n from app_auth.sessions where user_id = ${leader.userId}`;
     const results = await Promise.all([verify(leader.email, code), verify(leader.email, code)]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
-    const sql = await getDb();
     const [row] = await sql`select count(*)::int as n from app_auth.sessions where user_id = ${leader.userId}`;
-    expect(row.n).toBe(1);
+    expect(row.n - before.n).toBe(1);
   });
 });
 
@@ -198,8 +208,11 @@ describe("AUTH-05/06 sessions", () => {
     const leader = await registerLeader();
     await requestCode(leader.email);
     const res = await verify(leader.email, lastCodeFor(leader.email));
-    const setCookie = res.headers.get("set-cookie")!;
+    const cookies = res.headers.getSetCookie();
+    const setCookie = cookies.find((c) => c.startsWith("__Host-sj_session="))!;
     expect(setCookie).toMatch(/^__Host-sj_session=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=\d+$/);
+    // The one-time code's browser binding is cleared once it has been used.
+    expect(cookies).toContain("__Host-sj_otp=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
     expect(Number(setCookie.match(/Max-Age=(\d+)/)![1])).toBeGreaterThan(11 * 3600);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
 
@@ -358,14 +371,12 @@ describe("AUTH-11/12 guards and admin separation", () => {
     const sql = await getDb();
     const admin = await seedAdmin(["reports.view"]);
     const [before] = await sql`select * from app_auth.admin_users where id = ${admin.id}`;
-    const res = await registerRoute.POST(
-      apiRequest("/v1/auth/register", {
-        category: "startup_founder", teamName: "Admin Team", fullName: "Impostor", email: admin.email, photoUrl: PHOTO,
-        mobile: "9876543210", altMobile: "9876543211", domain: "d", projectDetails: "p", city: "c", state: "s",
-        country: "India", linkedinUrl: "in/x", aadharNumber: "123412341234",
-        members: [{ name: "M", photoUrl: PHOTO, phone: "9123456780", email: `m-${admin.email}` }],
-      })
-    );
+    const res = await registerVerified({
+      category: "startup_founder", teamName: "Admin Team", fullName: "Impostor", email: admin.email, photoUrl: PHOTO,
+      mobile: "9876543210", altMobile: "9876543211", domain: "d", projectDetails: "p", city: "c", state: "s",
+      country: "India", linkedinUrl: "in/x", aadharNumber: nextAadhaar(),
+      members: [{ name: "M", photoUrl: PHOTO, phone: "9123456780", email: `m-${admin.email}` }],
+    });
     expect(res.status).toBe(200);
     const [after] = await sql`select * from app_auth.admin_users where id = ${admin.id}`;
     expect(after).toEqual(before);

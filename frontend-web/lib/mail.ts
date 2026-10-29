@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { getAppEnv, getMailConfig } from "./config";
+import { isSafeEmailAddress } from "./email-address";
 
 export interface OutgoingMail {
   to: string;
@@ -31,6 +32,11 @@ function isAllowed(recipient: string, allowlist: string[]): boolean {
 export async function sendMail(message: OutgoingMail): Promise<boolean> {
   const config = getMailConfig();
 
+  if (!isSafeEmailAddress(message.to)) {
+    console.warn("[MAIL] Recipient is not a plain single address; message skipped.");
+    return false;
+  }
+
   if (config.recipientAllowlist && !isAllowed(message.to, config.recipientAllowlist)) {
     console.warn("[MAIL] Recipient is not on MAIL_RECIPIENT_ALLOWLIST; message skipped.");
     return false;
@@ -61,3 +67,33 @@ export async function sendMail(message: OutgoingMail): Promise<boolean> {
   await transporter.sendMail(envelope);
   return true;
 }
+
+/**
+ * Checks the configured transport without sending anything: for SMTP it connects and logs in
+ * (nodemailer verify). Errors keep the server's message but never include the password.
+ */
+export async function verifyMailTransport(env: Record<string, string | undefined> = process.env): Promise<{ transport: "smtp" | "log"; detail: string }> {
+  const config = getMailConfig(env);
+  if (config.transport === "log") return { transport: "log", detail: "log transport: messages are written to the server log; nothing to verify" };
+  const smtp = config.smtp!;
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: smtp.auth,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  });
+  try {
+    await transporter.verify();
+  } catch (err: any) {
+    const pass = smtp.auth?.pass;
+    const message = String(err?.message ?? err);
+    throw new Error(`SMTP check failed (${err?.code ?? "error"}): ${pass ? message.split(pass).join("[redacted]") : message}`);
+  } finally {
+    transporter.close();
+  }
+  return { transport: "smtp", detail: `connected and signed in to ${smtp.host}:${smtp.port}${smtp.secure ? " (TLS)" : " (STARTTLS)"}` };
+}
+

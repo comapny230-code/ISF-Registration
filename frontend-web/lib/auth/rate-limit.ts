@@ -23,8 +23,12 @@ export const LIMITS = {
   holdPerUser: { name: "hold:user:1m", windowSeconds: 60, max: 30 },
   confirmPerUser: { name: "confirm:user:1m", windowSeconds: 60, max: 30 },
   releasePerUser: { name: "release:user:1m", windowSeconds: 60, max: 30 },
+  ticketPerUser: { name: "ticket:user:1m", windowSeconds: 60, max: 20 },
   adminWritePerAdmin: { name: "admin-write:admin:1m", windowSeconds: 60, max: 30 },
   registrationPerIp: { name: "register:ip:15m", windowSeconds: 15 * 60, max: 30 },
+  registrationCodePerEmail: { name: "reg-code:email:15m", windowSeconds: 15 * 60, max: 3 },
+  registrationCodePerEmailDaily: { name: "reg-code:email:24h", windowSeconds: 24 * 60 * 60, max: 10 },
+  registrationCodePerIp: { name: "reg-code:ip:15m", windowSeconds: 15 * 60, max: 20 },
 } satisfies Record<string, RateLimit>;
 
 /** Counts one hit and throws 429 once the window's limit is exceeded. */

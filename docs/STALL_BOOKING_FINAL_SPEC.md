@@ -1170,7 +1170,7 @@ Rows marked "Organiser approval: Yes" need **organiser approval**. None has been
 | ID | Decision | Provisional default (not approved) | Reason | If left undecided | Organiser approval |
 |---|---|---|---|---|---|
 | D-01 | Eligible tracks | None enabled (`eligible_tracks='{}'`); suggested: Senior and Junior both eligible, since both tracks' perks mention a demo desk or kiosk | Can't be inferred safely | Booking can't open | Yes |
-| D-02 | Organiser approval of teams | Required (`require_team_approval=true`) | Registration is unauthenticated, so filtering spam or duplicates protects inventory | Every team stays `pending`; nobody can book | Yes |
+| D-02 | Organiser approval of teams | **Not required** (owner, 2026-10-29: email-verified registration plus daily organiser review; was `require_team_approval=true`) | Registration is unauthenticated, so filtering spam or duplicates protects inventory | Every team stays `pending`; nobody can book | Yes |
 | D-03 | Lead one team and be a member of another | Allowed; never modifies the other account (R-03) | Common in student teams | Current behaviour is unsafe (overwrites) | Yes |
 | D-04 | One person leading two teams (same email) | Impossible: a 2026 leader row in either track blocks a second (R-02) | Takeover prevention | — | Yes (acknowledge) |
 | D-05 | Booking window and timezone | `opens_at` / `closes_at` in IST (`Asia/Kolkata`), stored UTC; suggested after the 11 Nov registration deadline and after approvals | Final team list | Can't open | Yes |
@@ -1370,6 +1370,60 @@ Each bullet is about one reviewable PR with its own tests. **P0** is human-only.
   3. Disabling an already-disabled stall, or setting an unchanged approval, returns `changed: false` with no audit row.
   4. The admin stall view uses the E5 snapshot, which shows `unavailable` for both disabled and unapproved stalls; enabling an unapproved stall returns `STALL_NOT_APPROVED`.
   5. No settings-editing UI: opening booking stays an operator runbook action (D-01..D-07).
+
+**P6, started after checkpoint `201e622` (uncommitted):**
+- **Security review:**
+  - `npm audit` flagged nodemailer 10.0.12 (address-parser advisories). Every fixed release was younger than two weeks, so the issue is mitigated in code: `lib/email-address.ts` allows only plain single addresses into the mailer and registration; tests are in `tests/unit/email-address.test.ts`. The upgrade is tracked in the launch evidence.
+  - Security response headers are added in `next.config.ts` (frame-ancestors/X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, COOP, HSTS) and asserted on 7 routes by `e2e/security-headers.spec.ts`. A script CSP is still deferred (T-20).
+- **Migration runner** (P1 item 6, previously deferred): `scripts/migrate.mts` (status/apply/dry-run/baseline/verify; explicit `MIGRATION_DATABASE_URL`; refuses the transaction pooler; target guards; checksums; advisory lock). Verification SQL is in `database/verify/`; the runbook is `docs/runbooks/deploy-migrations.md`; tests are in `tests/db/migrate-runner.test.ts`. Node scripts are `.mts` and run with Node 22's type stripping (`allowImportingTsExtensions` enabled for `tsc`).
+- **Load tooling:**
+  - `load/ld01..ld05*.js` (k6, thresholds encode §9.7)
+  - `scripts/load/seed-fixtures.mts` and `check-invariants.mts`: production is always refused; staging requires a marker table and TLS
+  - `load/README.md`
+  - Run locally across 3 app instances (results in `docs/release/LAUNCH_EVIDENCE.md`)
+- **Launch evidence:** `docs/release/LAUNCH_EVIDENCE.md`, with gate-by-gate status and owners.
+- **Deviations:**
+  1. Load runs are local (one machine, no pooler); staging runs remain required for LG-10.
+  2. The Toxiproxy network-fault variant and pooler runs remain open (no staging or Docker).
+  3. LD-01/LD-04 durations were shortened to 2 minutes for the local runs.
+
+**Post-P6 changes requested by the owner (2026-10-29, uncommitted):**
+- **One-click booking:** "Book my stall" places the 5-minute hold and immediately asks for confirmation; "Not now" keeps the hold until it expires. Server rules are unchanged.
+- **Registration → booking handoff.** This is a deliberate exception to §3.4 ("leaders sign in with an emailed code"), asked for by the owner:
+  - A brand-new leader registering through the site's own form (same-origin JSON) receives a leader session without an email code. The session row is created inside the registration transaction, so it exists only if the registration commits; the cookie is sent only after commit. Absolute lifetime is 2 hours.
+  - No session is issued for a failed or rolled-back registration, a 409 re-registration, a cross-site or Origin-less request, or an email that already had an account (for example a listed team member). Those registrants sign in with a code as before.
+  - Team identity still comes only from the persisted leader row. Approval, window and track rules are unchanged, so with D-02 (`require_team_approval=true`) a new team sees "awaiting approval".
+  - Known consequence: the handoff session proves control of the browser that registered, not of the email address.
+- **Ticket and contact:** after a successful confirmation, a popup shows the arrangements contact (Mr Ravi, 9437432282) and offers the ticket. `GET /v1/booking/ticket` returns the signed-in leader's own confirmed booking as a PDF. It takes no identifiers, is rate-limited, returns 404 without a confirmed booking, and returns 409 `STALL_CODE_MISSING` rather than printing an invalid stall code.
+- **Leader-only enforcement:** re-verified with new tests covering a member's session, an admin session, unauthenticated requests, an injected `teamId`, and another team's hold ID.
+
+**Security audit and hardening (2026-10-29, uncommitted):**
+- **Registration data closed to the Data API (LG-04):** migration `0006_public_tables_rls.sql` enables row-level security on every `public` table and revokes PUBLIC, anon and authenticated. The owner bypasses RLS, so the app is unchanged; `isf_app` policies still wait for B-08. Applied locally only.
+- **Booking confirmation email** goes to the registered address on each new booking, so the owner of an address learns of any booking made under it. This mitigates the unverified post-registration session.
+- **Session rotation on the registration handoff:** a leader session already on the browser is revoked when the new one is issued, as OTP sign-in does.
+- **Registration input limits:** the body is capped at 32 MB (413) and malformed JSON returns 400. Photos must be JPEG/PNG/WebP data URLs (≤ 2 MB) or `https://` links. Reports must be PDF/Word/PowerPoint/image data URLs (≤ 20 MB of content) or `https://` links. Scriptable types (HTML, SVG, `javascript:`) are rejected.
+- **Hold tokens** must use the exact canonical base64url signature; padding-bit variants are refused.
+- **Sign-in codes bound to the requesting browser** (migration `0007`, second audit pass):
+  - **Why:** someone who only knew a leader's email could burn the leader's live code with 5 wrong guesses, or cancel it with a new request, keeping a rival team out while booking opens.
+  - **Fix:** a code request now sets a random `__Host-sj_otp` cookie (HttpOnly, Secure, SameSite=Strict, 15 min) for every address, and only its SHA-256 is stored. Verification considers only challenges with the caller's binding; a request supersedes only that browser's earlier code; the cookie is cleared after sign-in.
+  - **Consequence:** a code must be entered in the same browser that requested it.
+- **Still open:** the per-email request limits (3 per 15 min, 10 per day) can be used up by someone else, which delays a leader's sign-in. Leaders should sign in before booking opens (sessions last 12 hours). A real fix needs a CAPTCHA or an organiser decision to relax the per-email limits.
+
+**Registration hardening and approval removed (owner decision, 2026-10-29, uncommitted; migration `0008`):**
+- **Email verified during registration:**
+  - The form's "Send verification code" button emails a 6-digit code (`POST /v1/auth/register/email-code`, bound to the browser like sign-in codes, 5 attempts, 10 minutes, 3 per 15 min / 10 per day per address, 20 per 15 min per IP).
+  - No code is issued for an already-registered address (409).
+  - The registration is refused without the verified code, which is consumed in the registration transaction (a failed registration leaves it usable).
+  - Because the address is proven, the post-registration session is now also given to addresses that already had an account (e.g. a listed team member).
+- **Aadhaar:**
+  - Must pass the Verhoeff check digit (first digit 2-9). This rejects invented numbers; it cannot prove ownership.
+  - One leader registration per Aadhaar across both tracks, enforced in the registration transaction under an advisory lock.
+  - Existing duplicates are not changed (none can be checked in production from here).
+- **Bot filters:**
+  - A hidden `website` field must stay empty.
+  - A signed form token (`GET /v1/auth/register/form-token`) must be at least 20 s old (configurable only in local/test) and under 24 h.
+- **D-02 replaced:** `require_team_approval` is now `false` (setting and column default). Organisers review registrations and bookings daily from the admin page and can still reject a team (blocks booking) or cancel a booking.
+- **Not done:** CAPTCHA (needs a provider account and keys).
 
 **Not verified (owner):**
 - Production schema, grants, RLS and Data API exposure (B-03, B-04, [INFRA])

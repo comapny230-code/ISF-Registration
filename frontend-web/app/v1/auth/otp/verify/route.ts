@@ -1,4 +1,4 @@
-import { verifyCodeAndStartSession } from "@/lib/auth/otp";
+import { clearedOtpBindingCookie, otpBindingFrom, verifyCodeAndStartSession } from "@/lib/auth/otp";
 import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
 import { SESSION_COOKIE, sessionTokenFrom } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -32,7 +32,8 @@ export const POST = handler(async (request, { requestId }) => {
     body.audience,
     body.email,
     body.code,
-    sessionTokenFrom(request, body.audience)
+    sessionTokenFrom(request, body.audience),
+    otpBindingFrom(request)
   );
   if (!login) {
     throw new HttpError(400, "INVALID_OR_EXPIRED_CODE", "The code is invalid or has expired. Request a new code and try again.");
@@ -42,6 +43,9 @@ export const POST = handler(async (request, { requestId }) => {
     { principal: { type: body.audience, displayName: login.displayName }, sessionExpiresAt: login.absoluteExpiresAt },
     200,
     requestId,
-    { "Set-Cookie": sessionCookie(SESSION_COOKIE[body.audience], login.token, login.maxAgeSeconds) }
+    [
+      ["Set-Cookie", sessionCookie(SESSION_COOKIE[body.audience], login.token, login.maxAgeSeconds)],
+      ["Set-Cookie", clearedOtpBindingCookie()],
+    ]
   );
 });

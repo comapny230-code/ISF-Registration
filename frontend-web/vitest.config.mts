@@ -20,6 +20,8 @@ const TEST_ENV = {
   OTP_PEPPER: "test-otp-pepper-0123456789abcdef0123",
   RATE_LIMIT_HASH_KEY: "test-rate-limit-key-0123456789abcdef",
   HOLD_TOKEN_KEYS: "t1:test-hold-token-key-0123456789abcdef",
+  // Tests submit at machine speed; the minimum fill time is tested on its own.
+  REGISTRATION_MIN_FILL_SECONDS: "0",
 };
 
 export default defineConfig({

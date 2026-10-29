@@ -8,12 +8,39 @@ import type postgres from "postgres";
 import { getAuthConfig } from "../config";
 import { escapeHtml } from "../html";
 import { sendMail } from "../mail";
-import { constantTimeEqual, hmac, sixDigitCode } from "./crypto";
+import { readCookie } from "../http";
+import { constantTimeEqual, hmac, randomToken, sha256, sixDigitCode } from "./crypto";
 import { EDITION_ID } from "./leader";
 import { createSession, revokeSessionToken, type Audience, type CreatedSession } from "./session";
 
 export const OTP_TTL_MINUTES = 10;
 export const OTP_MAX_ATTEMPTS = 5;
+
+/**
+ * Binds a code to the browser that requested it (migration 0007): only a browser holding
+ * this cookie can try the code, so knowing someone's email is not enough to burn or cancel
+ * their code. Strict, because it is only ever needed by same-site requests.
+ */
+export const OTP_BINDING_COOKIE = "__Host-sj_otp";
+const BINDING_MAX_AGE_SECONDS = 15 * 60;
+
+export function otpBindingFrom(request: Request): string | null {
+  const value = readCookie(request, OTP_BINDING_COOKIE);
+  return value && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
+
+/** The caller's binding if it has a valid one, otherwise a new random one. */
+export function otpBindingFor(request: Request): string {
+  return otpBindingFrom(request) ?? randomToken();
+}
+
+export function otpBindingCookie(value: string): string {
+  return `${OTP_BINDING_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${BINDING_MAX_AGE_SECONDS}`;
+}
+
+export function clearedOtpBindingCookie(): string {
+  return `${OTP_BINDING_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
 
 export interface Principal {
   id: string;
@@ -42,24 +69,30 @@ function codeMac(challengeId: string, code: string): Buffer {
   return hmac(getAuthConfig().otpPepper, `${challengeId}:${code}`);
 }
 
-/** Supersedes earlier codes for this email and stores a new one. Returns the plaintext code for delivery. */
+/**
+ * Supersedes this browser's earlier codes for the email (never another browser's) and
+ * stores a new one bound to it. Returns the plaintext code for delivery.
+ */
 export async function issueLoginCode(
   sql: postgres.Sql,
   audience: Audience,
   email: string,
-  principal: Principal
+  principal: Principal,
+  binding: string
 ): Promise<string> {
   const code = sixDigitCode();
   const challengeId = randomUUID();
+  const bindingHash = sha256(binding);
   await sql.begin(async (tx) => {
     await tx`
       update app_auth.login_challenges set superseded_at = clock_timestamp()
-       where audience = ${audience} and email = ${email} and consumed_at is null and superseded_at is null`;
+       where audience = ${audience} and email = ${email} and binding_hash = ${bindingHash}
+         and consumed_at is null and superseded_at is null`;
     await tx`
-      insert into app_auth.login_challenges (id, audience, email, user_id, admin_user_id, code_mac, expires_at)
+      insert into app_auth.login_challenges (id, audience, email, user_id, admin_user_id, code_mac, expires_at, binding_hash)
       values (${challengeId}, ${audience}, ${email},
               ${audience === "leader" ? principal.id : null}, ${audience === "admin" ? principal.id : null},
-              ${codeMac(challengeId, code)}, clock_timestamp() + make_interval(mins => ${OTP_TTL_MINUTES}::int))`;
+              ${codeMac(challengeId, code)}, clock_timestamp() + make_interval(mins => ${OTP_TTL_MINUTES}::int), ${bindingHash})`;
   });
   if (Math.random() < 0.02) {
     await sql`delete from app_auth.login_challenges where created_at < clock_timestamp() - interval '7 days'`;
@@ -81,14 +114,19 @@ export async function verifyCodeAndStartSession(
   audience: Audience,
   email: string,
   code: string,
-  replacedToken: string | null
+  replacedToken: string | null,
+  binding: string | null
 ): Promise<VerifiedLogin | null> {
+  // No binding cookie: this browser never requested a code, so there is nothing to try
+  // (and no other browser's attempt counter is touched).
+  if (!binding) return null;
+  const bindingHash = sha256(binding);
   return sql.begin(async (tx) => {
     const [challenge] = await tx`
       update app_auth.login_challenges set attempts = attempts + 1
        where id = (
                select id from app_auth.login_challenges
-                where audience = ${audience} and email = ${email}
+                where audience = ${audience} and email = ${email} and binding_hash = ${bindingHash}
                   and consumed_at is null and superseded_at is null
                 order by created_at desc limit 1)
          and attempts < ${OTP_MAX_ATTEMPTS}::int

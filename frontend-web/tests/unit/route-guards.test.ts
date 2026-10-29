@@ -14,6 +14,9 @@ const UNAUTHENTICATED_BY_DESIGN = new Map<string, string>([
   ["auth/otp/verify/route.ts", "login step 2 (E2)"],
   ["auth/logout/route.ts", "revokes only the caller's own cookie (E3)"],
   ["auth/session/route.ts", "reports the caller's own sessions (E4)"],
+  ["auth/register/email-code/route.ts", "registration step: emails a code to the address being registered"],
+  ["auth/register/form-token/route.ts", "registration step: signed form timestamp, no data"],
+  ["health/route.ts", "uptime check: database reachable or not, nothing else"],
   ["booking/stalls/route.ts", "authorises inline: leader or admin session, or organiser-enabled public map (E5)"],
 ]);
 
@@ -50,7 +53,7 @@ describe("AUTH-15 per-handler authorisation", () => {
   });
 
   it("every state-changing exempt route except registration enforces same-origin JSON", () => {
-    for (const f of ["auth/otp/request/route.ts", "auth/otp/verify/route.ts", "auth/logout/route.ts"]) {
+    for (const f of ["auth/otp/request/route.ts", "auth/otp/verify/route.ts", "auth/logout/route.ts", "auth/register/email-code/route.ts"]) {
       expect(readFileSync(path.join(v1, f), "utf8")).toMatch(/assertSameOriginJson\(request\)/);
     }
   });

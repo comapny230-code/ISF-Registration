@@ -43,7 +43,14 @@ export interface Snapshot {
   asOf: string;
   serverNow: string;
   bookingWindow: { enabled: boolean; opensAt: string | null; closesAt: string | null };
-  zones: Array<{ code: string; name: string; extent: { widthFt: number | null; depthFt: number | null }; landmarks: Array<{ label: string; kind: string }>; inventoryStatus: string }>;
+  zones: Array<{
+    code: string;
+    name: string;
+    extent: { widthFt: number | null; depthFt: number | null };
+    /** Optional x/y/w/d (feet) place a landmark on the map; otherwise it is only listed. */
+    landmarks: Array<{ label: string; kind: string; x?: number; y?: number; w?: number; d?: number }>;
+    inventoryStatus: string;
+  }>;
   stalls: SnapshotStall[];
 }
 
@@ -121,4 +128,26 @@ export const bookingApi = {
     ),
   release: (holdId: string) => post<{ status: "released" | "expired" }>(`/v1/booking/holds/${encodeURIComponent(holdId)}`, {}, "DELETE"),
   logout: () => post<null>("/v1/auth/logout", { audience: "leader" }),
+  /** Downloads the team's own ticket PDF; errors become ApiError like every other call. */
+  downloadTicket: async () => {
+    let res: Response;
+    try {
+      res = await fetch("/v1/booking/ticket", { credentials: "same-origin", cache: "no-store" });
+    } catch {
+      throw new ApiError(0, "NETWORK", "We could not reach the server. Check your connection.");
+    }
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null))?.error;
+      throw new ApiError(res.status, err?.code ?? "HTTP_ERROR", err?.message ?? `Download failed (${res.status}).`, err?.requestId);
+    }
+    const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "stall-ticket.pdf";
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
 };

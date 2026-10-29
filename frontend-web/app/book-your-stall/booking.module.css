@@ -1,7 +1,7 @@
 .page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 20px 48px;
+  padding: 24px 20px 56px;
   display: grid;
   gap: 18px;
 }
@@ -63,19 +63,9 @@
   outline-offset: 2px;
 }
 
-/* SVG stalls show keyboard focus on the stall border instead of a box outline. */
-.stall:focus {
-  outline: none;
-}
-
-.stall:focus-visible rect {
-  stroke: var(--color-terracotta-dark);
-  stroke-width: 4px;
-}
-
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
   align-items: start;
 }
@@ -83,6 +73,14 @@
 .aside {
   display: grid;
   gap: 12px;
+}
+
+@media (min-width: 901px) {
+  /* The selected stall and the hold timer stay in view while the map scrolls. */
+  .aside {
+    position: sticky;
+    top: 16px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -109,86 +107,243 @@
   gap: 12px;
 }
 
+/* Sans, so stall codes keep lining figures ("A08", not an old-style "Ao8"). */
 .panelTitle {
-  font-size: 1.05rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.1rem;
   margin: 0;
 }
 
 .mapWrap {
-  background: var(--color-ivory-card);
+  background: #f6f3ec;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 12px;
+  border-radius: var(--radius-lg);
+  padding: 16px;
   overflow: auto;
+  max-height: 78vh;
+  box-shadow: inset 0 1px 0 #fff;
 }
 
 .map {
   display: block;
-  width: 100%;
+  max-width: none;
   height: auto;
-  max-height: 70vh;
 }
 
 /* Map units are feet; strokes use screen pixels so they stay crisp at any zoom. */
 .zoneOutline {
-  fill: #fff;
-  stroke: var(--color-charcoal-light);
+  stroke: #9fb79a;
   stroke-width: 1.5px;
-  stroke-dasharray: 6 4;
   vector-effect: non-scaling-stroke;
 }
 
+/* Landmarks: drawn behind stalls, never interactive. */
+.landmark rect {
+  fill: #fbf8f1;
+  stroke: #b9ad97;
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.landmark text {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  fill: var(--color-charcoal-mid);
+  pointer-events: none;
+}
+
+.landmark_road rect {
+  fill: #3a3633;
+  stroke: none;
+}
+
+.roadLine {
+  stroke: var(--color-gold);
+  stroke-width: 1.5px;
+  stroke-dasharray: 8 7;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The road's own colour behind the label breaks the centre line around it. */
+.landmark_road text {
+  fill: #fff;
+  stroke: #3a3633;
+  stroke-width: 6px;
+  paint-order: stroke;
+  stroke-linejoin: round;
+}
+
+.landmark_entry rect,
+.landmark_exit rect {
+  fill: var(--color-forest-mid);
+  stroke: none;
+}
+
+.landmark_entry text,
+.landmark_exit text {
+  fill: #fff;
+  letter-spacing: 0.08em;
+}
+
+.landmark_stage rect {
+  fill: var(--color-gold-soft);
+  stroke: var(--color-gold-warm);
+  stroke-width: 1.5px;
+}
+
+.landmark_stage text {
+  fill: var(--color-gold-deep);
+}
+
+.landmark_reserved rect {
+  fill: var(--color-forest-soft);
+  stroke: var(--color-forest-accent);
+}
+
+.landmark_reserved text {
+  fill: var(--color-forest);
+}
+
+.landmark_boundary rect {
+  fill: #8fae88;
+  stroke: none;
+}
+
+.landmark_boundary text {
+  fill: #fff;
+}
+
+.landmark_open_space rect {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: #8fae88;
+  stroke-dasharray: 6 5;
+}
+
+.landmark_open_space text {
+  fill: #4f6b4a;
+  font-weight: 600;
+}
+
+.landmark_restricted rect {
+  fill: url(#surface-helipad);
+  stroke: #a8a29e;
+}
+
+.landmark_restricted text {
+  fill: var(--color-charcoal-muted);
+}
+
+/* Stalls: a 10 × 10 ft canopy seen from above, with its roof folds. */
 .stall {
   cursor: pointer;
 }
 
-.stall rect {
+.stall:focus {
+  outline: none;
+}
+
+.stallShadow {
+  fill: rgba(28, 25, 23, 0.16);
+}
+
+.stallTop {
   stroke: var(--color-forest);
-  stroke-width: 1.5px;
+  stroke-width: 1.25px;
   vector-effect: non-scaling-stroke;
+  transition: fill 120ms ease;
+}
+
+.canopy {
+  stroke: rgba(20, 62, 48, 0.12);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .stall text {
-  font-size: 2.6px;
+  font-family: var(--font-sans);
+  font-size: 2.7px;
   font-weight: 700;
   pointer-events: none;
-  fill: var(--ink);
+  fill: var(--color-forest-dark);
 }
 
 .stall .mark {
-  font-size: 2.4px;
+  font-size: 2.6px;
 }
 
-.available rect {
+.available .stallTop {
   fill: #fff;
 }
 
-.held rect {
-  fill: url(#pattern-held);
+.available:hover .stallTop {
+  fill: var(--color-gold-soft);
 }
 
-.booked rect {
-  fill: var(--color-charcoal-mid);
+.held .stallTop {
+  fill: url(#pattern-held);
+  stroke: var(--color-gold-deep);
+}
+
+.booked .stallTop {
+  fill: var(--color-forest-dark);
+  stroke: var(--color-forest-deep);
+}
+
+.booked .canopy {
+  stroke: rgba(255, 255, 255, 0.14);
 }
 
 .booked text {
   fill: #fff;
 }
 
-.unavailable rect {
+.unavailable {
+  cursor: not-allowed;
+}
+
+.unavailable .stallTop {
   fill: url(#pattern-unavailable);
-  stroke: var(--color-charcoal-light);
+  stroke: #a8a29e;
 }
 
-.mine rect {
-  stroke: var(--accent);
+.unavailable text {
+  fill: var(--color-charcoal-muted);
+}
+
+.mine .stallTop {
+  stroke: var(--color-terracotta);
   stroke-width: 3px;
 }
 
-.selected rect {
-  stroke: var(--accent);
+.selected .stallTop {
+  fill: var(--color-terracotta-soft);
+  stroke: var(--color-terracotta);
   stroke-width: 3px;
-  stroke-dasharray: 5 3;
+}
+
+.selected text {
+  fill: var(--color-terracotta-deep);
+}
+
+.stall:focus-visible .stallTop {
+  stroke: var(--color-terracotta-dark);
+  stroke-width: 4px;
+}
+
+.mapFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px 20px;
+}
+
+.landmarkDetails summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .legend {
@@ -244,8 +399,10 @@
 }
 
 .countdown {
-  font-family: var(--font-mono);
-  font-size: 2.2rem;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.8rem;
+  line-height: 1.1;
   font-weight: 800;
   color: var(--color-terracotta-dark);
   letter-spacing: 1px;
@@ -299,4 +456,468 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ---------- Leader booking page ---------- */
+
+.hero {
+  background: var(--color-forest);
+  background-image: radial-gradient(120% 140% at 100% 0%, var(--color-forest-mid) 0%, transparent 55%);
+  color: #fff;
+}
+
+.heroInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 20px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.heroTitle {
+  font-family: "Playfair Display", var(--font-serif);
+  font-weight: 800;
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+  color: #fff;
+}
+
+.heroTeam {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.trackPill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(214, 178, 94, 0.18);
+  color: var(--color-gold-light);
+  border: 1px solid rgba(214, 178, 94, 0.45);
+}
+
+.heroMeta {
+  margin: 6px 0 0;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.heroButton {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.heroButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.heroButton:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* Choose → hold → confirm. The current step is the only bright one. */
+.steps {
+  list-style: none;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.stepDot {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.step[data-state="current"] {
+  color: #fff;
+  font-weight: 600;
+}
+
+.step[data-state="current"] .stepDot {
+  background: var(--color-terracotta);
+  border-color: var(--color-terracotta);
+  color: #fff;
+}
+
+.step[data-state="done"] {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.step[data-state="done"] .stepDot {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  color: var(--color-forest-deep);
+}
+
+/* Area tabs show how many stalls are still free in each area. */
+.areaTabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.areaTab {
+  display: grid;
+  text-align: left;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.areaTab:hover {
+  border-color: var(--color-forest-accent);
+}
+
+.areaName {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.areaCount {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.areaTab[aria-selected="true"] {
+  background: var(--color-forest);
+  border-color: var(--color-forest);
+  color: #fff;
+}
+
+.areaTab[aria-selected="true"] .areaCount {
+  color: var(--color-gold-light);
+}
+
+.viewControls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segment {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.segment button {
+  border: 0;
+  background: transparent;
+  padding: 8px 14px;
+  min-width: 42px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.segment button + button {
+  border-left: 1px solid var(--line);
+}
+
+.segment button[aria-pressed="true"] {
+  background: var(--color-forest-soft);
+  color: var(--color-forest);
+}
+
+.segment button:disabled {
+  color: #c4beb5;
+  cursor: default;
+}
+
+.areaTab:focus-visible,
+.segment button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.stage {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  background: var(--color-ivory-card);
+}
+
+.chip[data-status="available"] {
+  background: var(--color-forest-soft);
+  color: var(--color-forest);
+}
+
+.chip[data-status="held"] {
+  background: var(--color-gold-soft);
+  color: var(--color-gold-deep);
+}
+
+.chip[data-status="booked"] {
+  background: #ece9e4;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.facts dt {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.bigButton {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 1rem;
+}
+
+/* The live hold: the remaining time is the loudest thing on the page. */
+.holdPanel {
+  border-color: var(--color-terracotta);
+  box-shadow: 0 0 0 3px var(--color-terracotta-soft);
+}
+
+.timeBar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-ivory-sub);
+  overflow: hidden;
+  margin: 6px 0 8px;
+}
+
+.timeBar span {
+  display: block;
+  height: 100%;
+  background: var(--color-terracotta);
+  transition: width 250ms linear;
+}
+
+.timeBar .timeBarLow {
+  background: var(--danger);
+}
+
+/* A booking reads like the stub of an entry pass. */
+.ticket {
+  background: var(--color-forest);
+  border-color: var(--color-forest);
+  color: #fff;
+}
+
+.ticket .panelTitle {
+  color: var(--color-gold-light);
+  font-family: "Playfair Display", var(--font-serif);
+  font-size: 1.3rem;
+}
+
+.ticket :global(.muted) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ticketStall strong {
+  display: block;
+  font-family: "Playfair Display", var(--font-serif);
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.ticketLabel {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ticketCut {
+  border-top: 2px dashed rgba(255, 255, 255, 0.28);
+  margin: 4px -18px;
+  position: relative;
+}
+
+.ticketCut::before,
+.ticketCut::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.ticketCut::before {
+  left: -9px;
+}
+
+.ticketCut::after {
+  right: -9px;
+}
+
+.ticket .ref {
+  color: var(--color-gold-light);
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 640px) {
+  .heroInner {
+    padding-top: 22px;
+  }
+
+  .areaTab {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  .steps {
+    gap: 8px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeBar span,
+  .stallTop {
+    transition: none;
+  }
+}
+
+.dialogTime {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-terracotta-dark);
+}
+
+.holdPanel :global(.actions) {
+  justify-content: stretch;
+  display: grid;
+  gap: 8px;
+}
+
+/* After a successful booking: the ticket and who to contact next. */
+.bookedDialog {
+  max-width: 460px;
+  text-align: center;
+  justify-items: center;
+}
+
+.bookedCheck {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-forest);
+  color: var(--color-gold-light);
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.bookedTitle {
+  font-family: "Playfair Display", var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1.15;
+  margin: 0;
+  color: var(--color-forest);
+}
+
+.contactCard {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--color-terracotta-soft);
+  border-left: 4px solid var(--color-terracotta);
+  text-align: left;
+}
+
+.phone {
+  color: var(--color-terracotta-deep);
+  font-weight: 800;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dialogActions {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
+.ticketButton {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  color: var(--color-forest-deep);
+  font-weight: 700;
+}
+
+.ticketButton:hover {
+  border-color: var(--color-gold-light);
+  background: var(--color-gold-light);
+}
+
+.ticketContact {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.ticketPhone {
+  color: var(--color-gold-light);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }

@@ -3,11 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, bookingApi, type MyBooking, type Snapshot } from "@/lib/booking/client-api";
 import { serverOffsetMs, StatusPoller } from "@/lib/booking/client-poller";
 import styles from "./booking.module.css";
+import { ARRANGEMENTS_CONTACT } from "@/lib/booking/contact";
+import { BookedDialog } from "./components/booked-dialog";
 import { ConfirmDialog } from "./components/confirm-dialog";
 import { HoldPanel } from "./components/hold-panel";
-import { StallLegend, StallMap, StallPatterns } from "./components/stall-map";
+import { StallLegend, StallMap, StallPatterns, ZOOM_LEVELS } from "./components/stall-map";
 import { StallList } from "./components/stall-list";
-import { formatIst, hasGeometry, stallLabel } from "./components/stall-status";
+import { formatIst, hasGeometry, stallLabel, stallMark } from "./components/stall-status";
 
 type Notice = { kind: "ok" | "error" | "warn"; text: string } | null;
 
@@ -38,10 +40,14 @@ export function BookingApp({ displayName }: { displayName: string }) {
   const [me, setMe] = useState<MyBooking | null>(null);
   const [zoneCode, setZoneCode] = useState<string | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
+  const [zoomIndex, setZoomIndex] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Set only from a successful confirmation response, so failures never show it.
+  const [justBooked, setJustBooked] = useState<{ stallCode: string; bookingRef: string } | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const pollerRef = useRef<StatusPoller<Snapshot> | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
 
@@ -121,6 +127,11 @@ export function BookingApp({ displayName }: { displayName: string }) {
   const zoneStalls = useMemo(() => (snapshot?.stalls ?? []).filter((s) => s.zone === zoneCode), [snapshot, zoneCode]);
   const zoneHasMap = zoneStalls.some(hasGeometry);
   const selected = snapshot?.stalls.find((s) => s.id === selectedId) ?? null;
+  const freeByZone = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of snapshot?.stalls ?? []) if (s.status === "available") counts.set(s.zone, (counts.get(s.zone) ?? 0) + 1);
+    return counts;
+  }, [snapshot]);
 
   const refreshAll = async () => {
     await Promise.all([loadMe(), pollerRef.current?.refresh()]);
@@ -148,30 +159,48 @@ export function BookingApp({ displayName }: { displayName: string }) {
     }
   }
 
-  const placeHold = () =>
+  // "Book my stall" reserves the stall for the hold period at once (others see it on
+  // hold) and asks the leader to confirm. Dismissing the question keeps the reservation
+  // until it expires; confirming within that time makes the booking.
+  const bookStall = () =>
     run(async () => {
       const result = await bookingApi.hold(selectedId!);
-      return { kind: "ok", text: `Stall ${result.stallCode} is held for you. Confirm it before the timer runs out.` };
+      setConfirmOpen(true);
+      return { kind: "ok", text: `Stall ${result.stallCode} is reserved for you for 5 minutes. Confirm to make it yours.` };
     });
 
   const confirmBooking = () =>
     run(async () => {
       const result = await bookingApi.confirm(hold!.holdId, hold!.token);
       setConfirmOpen(false);
+      setJustBooked({ stallCode: result.stallCode, bookingRef: result.bookingRef });
       return { kind: "ok", text: `Booked! Stall ${result.stallCode}, reference ${result.bookingRef}.` };
     }).finally(() => setConfirmOpen(false));
 
   const releaseHold = () =>
     run(async () => {
       const result = await bookingApi.release(hold!.holdId);
-      return { kind: "ok", text: result.status === "released" ? "Hold released." : "Your hold had already expired." };
+      return { kind: "ok", text: result.status === "released" ? "Stall released. You can choose another stall." : "Your reservation had already expired." };
     });
 
   const onExpired = useCallback(() => {
-    setNotice({ kind: "warn", text: "Your hold expired and the stall has been released. You can select a stall again." });
+    setConfirmOpen(false);
+    setNotice({ kind: "warn", text: "Your hold expired because the booking was not confirmed within 5 minutes. The stall is free again; you can choose a stall again." });
     void loadMe();
     void pollerRef.current?.refresh();
   }, [loadMe]);
+
+  const downloadTicket = async () => {
+    setDownloading(true);
+    try {
+      await bookingApi.downloadTicket();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return toLogin();
+      setNotice({ kind: "error", text: err instanceof ApiError ? err.message : "Could not download the ticket. Please try again." });
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const signOut = async () => {
     await bookingApi.logout().catch(() => null);
@@ -181,154 +210,250 @@ export function BookingApp({ displayName }: { displayName: string }) {
   const blocked = me ? eligibilityText(me) : null;
   const canHold = Boolean(me?.eligibility.canHold && !me.reservation && selected?.status === "available");
 
+  // Where the team is in choose → book → confirm (4 = booked).
+  const step = booking ? 4 : hold ? 3 : selected ? 2 : 1;
+  const steps = ["Choose a stall", "Click Book my stall", "Confirm within 5 minutes"];
+
   return (
-    <div className={styles.page}>
+    <>
       <StallPatterns />
-      <div className={styles.titleRow}>
-        <div>
-          <h1 className={styles.title}>Book your stall</h1>
-          <p className={styles.subtitle}>
-            {me ? `${me.team.name} · ${me.team.track === "senior" ? "Senior" : "Junior"} track · ` : ""}
-            Signed in as {displayName}
-          </p>
-        </div>
-        <button className="btn" type="button" onClick={signOut}>
-          Sign out
-        </button>
-      </div>
-
-      {notice && (
-        <div
-          className={`notice ${notice.kind === "ok" ? "notice-ok" : notice.kind === "warn" ? "notice-warn" : "notice-error"}`}
-          role={notice.kind === "error" ? "alert" : "status"}
-          data-testid="notice"
-        >
-          {notice.text}
-        </div>
-      )}
-      {blocked && !me?.reservation && (
-        <div className="notice notice-warn" role="status" data-testid="eligibility">
-          {blocked}
-        </div>
-      )}
-
-      {!snapshot ? (
-        <p className="muted">Loading the venue…</p>
-      ) : snapshot.zones.length === 0 ? (
-        <div className="notice notice-warn">The stall layout has not been published yet. Please check back later.</div>
-      ) : (
-        <>
-          <div className={styles.toolbar}>
-            <div className={styles.tabs} role="tablist" aria-label="Venue areas">
-              {snapshot.zones.map((z) => (
-                <button
-                  key={z.code}
-                  type="button"
-                  role="tab"
-                  className={styles.tab}
-                  aria-selected={z.code === zoneCode}
-                  onClick={() => setZoneCode(z.code)}
-                >
-                  {z.name}
-                </button>
-              ))}
-            </div>
-            {zoneHasMap && (
-              <div className={styles.tabs} aria-label="View">
-                <button type="button" className={styles.tab} aria-pressed={view === "map"} aria-selected={view === "map"} onClick={() => setView("map")}>
-                  Map
-                </button>
-                <button type="button" className={styles.tab} aria-pressed={view === "list"} aria-selected={view === "list"} onClick={() => setView("list")}>
-                  List
-                </button>
-              </div>
+      <header className={styles.hero}>
+        <div className={styles.heroInner}>
+          <div>
+            <h1 className={styles.heroTitle}>Book your stall</h1>
+            {me && (
+              <p className={styles.heroTeam}>
+                <strong>{me.team.name}</strong>
+                <span className={styles.trackPill}>{me.team.track === "senior" ? "Senior track" : "Junior track"}</span>
+              </p>
             )}
+            <p className={styles.heroMeta}>
+              Signed in as {displayName}
+              {me?.bookingWindow.closesAt ? `. Booking closes ${formatIst(me.bookingWindow.closesAt)}.` : ""}
+            </p>
           </div>
+          <button className={styles.heroButton} type="button" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
+        <ol className={styles.steps} aria-label="Booking steps">
+          {steps.map((label, i) => {
+            const n = i + 1;
+            const state = n < step ? "done" : n === step ? "current" : "todo";
+            return (
+              <li key={label} className={styles.step} data-state={state} aria-current={state === "current" ? "step" : undefined}>
+                <span className={styles.stepDot} aria-hidden="true">
+                  {state === "done" ? "✓" : n}
+                </span>
+                {label}
+              </li>
+            );
+          })}
+        </ol>
+      </header>
 
-          <div className={styles.layout}>
-            <div style={{ display: "grid", gap: 12 }}>
-              {zone && zoneHasMap && view === "map" ? (
-                <div className={styles.mapWrap}>
-                  <StallMap zone={zone} stalls={zoneStalls} selectedId={selectedId} onSelect={selectStall} />
-                </div>
-              ) : (
-                <div className={styles.panel}>
-                  {!zoneHasMap && (
-                    <p className="muted small" style={{ margin: 0 }} data-testid="layout-pending">
-                      The exact layout of this area is still awaiting organiser approval, so stalls are listed without a map.
-                    </p>
+      <div className={styles.page}>
+        {notice && (
+          <div
+            className={`notice ${notice.kind === "ok" ? "notice-ok" : notice.kind === "warn" ? "notice-warn" : "notice-error"}`}
+            role={notice.kind === "error" ? "alert" : "status"}
+            data-testid="notice"
+          >
+            {notice.text}
+          </div>
+        )}
+        {blocked && !me?.reservation && (
+          <div className="notice notice-warn" role="status" data-testid="eligibility">
+            {blocked}
+          </div>
+        )}
+
+        {!snapshot ? (
+          <p className="muted">Loading the venue…</p>
+        ) : snapshot.zones.length === 0 ? (
+          <div className="notice notice-warn">The stall layout has not been published yet. Please check back later.</div>
+        ) : (
+          <>
+            <div className={styles.toolbar}>
+              <div className={styles.areaTabs} role="tablist" aria-label="Venue areas">
+                {snapshot.zones.map((z) => (
+                  <button
+                    key={z.code}
+                    type="button"
+                    role="tab"
+                    className={styles.areaTab}
+                    aria-selected={z.code === zoneCode}
+                    onClick={() => setZoneCode(z.code)}
+                  >
+                    <span className={styles.areaName}>{z.name}</span>
+                    <span className={styles.areaCount}>{freeByZone.get(z.code) ?? 0} free</span>
+                  </button>
+                ))}
+              </div>
+              {zoneHasMap && (
+                <div className={styles.viewControls}>
+                  {view === "map" && (
+                    <div className={styles.segment} role="group" aria-label="Zoom">
+                      <button type="button" aria-label="Zoom out" disabled={zoomIndex === 0} onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}>
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Zoom in"
+                        disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+                        onClick={() => setZoomIndex((i) => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
+                      >
+                        +
+                      </button>
+                    </div>
                   )}
-                  <StallList stalls={zoneStalls} selectedId={selectedId} onSelect={selectStall} caption={`Stalls in ${zone?.name ?? "this area"}`} />
+                  <div className={styles.segment} role="group" aria-label="View">
+                    <button type="button" aria-pressed={view === "map"} onClick={() => setView("map")}>
+                      Map
+                    </button>
+                    <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}>
+                      List
+                    </button>
+                  </div>
                 </div>
-              )}
-              <StallLegend />
-              {zone && zone.landmarks.length > 0 && (
-                <details>
-                  <summary className="small">Landmarks in {zone.name}</summary>
-                  <ul className={styles.landmarks}>
-                    {zone.landmarks.map((l) => (
-                      <li key={l.label}>{l.label}</li>
-                    ))}
-                  </ul>
-                </details>
               )}
             </div>
 
-            <aside className={styles.aside} ref={asideRef}>
-              {booking ? (
-                <section className={styles.panel} data-testid="booking-panel">
-                  <h2 className={styles.panelTitle}>Your stall is booked</h2>
-                  <p style={{ margin: 0 }}>
-                    Stall <strong>{booking.stallCode}</strong>
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    Reference <span className={styles.ref}>{booking.bookingRef}</span>
-                  </p>
-                  <p className="muted small" style={{ margin: 0 }}>
-                    Keep this reference. To change or cancel a booking, contact the organisers.
-                  </p>
-                </section>
-              ) : hold ? (
-                <HoldPanel
-                  hold={hold}
-                  offsetMs={offsetMs}
-                  busy={busy}
-                  onConfirm={() => setConfirmOpen(true)}
-                  onRelease={releaseHold}
-                  onExpired={onExpired}
-                />
-              ) : (
-                <section className={styles.panel} aria-labelledby="selection-title" data-testid="selection-panel">
-                  <h2 id="selection-title" className={styles.panelTitle}>
-                    {selected ? `Stall ${selected.code}` : "Select a stall"}
-                  </h2>
-                  {selected ? (
-                    <>
-                      <p style={{ margin: 0 }}>
-                        Status: <strong>{stallLabel(selected)}</strong>
+            <div className={styles.layout}>
+              <div className={styles.stage}>
+                {zone && zoneHasMap && view === "map" ? (
+                  <div className={styles.mapWrap}>
+                    <StallMap zone={zone} stalls={zoneStalls} selectedId={selectedId} onSelect={selectStall} zoom={ZOOM_LEVELS[zoomIndex]} />
+                  </div>
+                ) : (
+                  <div className={styles.panel}>
+                    {!zoneHasMap && (
+                      <p className="muted small" style={{ margin: 0 }} data-testid="layout-pending">
+                        The exact layout of this area is still awaiting organiser approval, so stalls are listed without a map.
                       </p>
-                      <button className="btn btn-primary" type="button" onClick={placeHold} disabled={busy || !canHold}>
-                        {busy ? "Holding…" : "Hold this stall for 5 minutes"}
-                      </button>
-                      <p className="muted small" style={{ margin: 0 }}>
-                        A hold reserves the stall for five minutes while you confirm. Only one hold per team.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="muted small" style={{ margin: 0 }}>
-                      Choose an available stall on the map or in the list.
-                    </p>
+                    )}
+                    <StallList stalls={zoneStalls} selectedId={selectedId} onSelect={selectStall} caption={`Stalls in ${zone?.name ?? "this area"}`} />
+                  </div>
+                )}
+                <div className={styles.mapFooter}>
+                  <StallLegend />
+                  {zone && zone.landmarks.length > 0 && (
+                    <details className={styles.landmarkDetails}>
+                      <summary>Landmarks in {zone.name}</summary>
+                      <ul className={styles.landmarks}>
+                        {zone.landmarks.map((l) => (
+                          <li key={l.label}>{l.label}</li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
-                </section>
-              )}
-            </aside>
-          </div>
-        </>
-      )}
+                </div>
+              </div>
 
-      {confirmOpen && hold && (
-        <ConfirmDialog stallCode={hold.stallCode} busy={busy} onConfirm={confirmBooking} onCancel={() => setConfirmOpen(false)} />
-      )}
-    </div>
+              <aside className={styles.aside} ref={asideRef}>
+                {booking ? (
+                  <section className={`${styles.panel} ${styles.ticket}`} data-testid="booking-panel">
+                    <h2 className={styles.panelTitle}>Your stall is booked</h2>
+                    <div className={styles.ticketStall}>
+                      <span className={styles.ticketLabel}>Stall</span>
+                      <strong>{booking.stallCode}</strong>
+                    </div>
+                    <div className={styles.ticketCut} aria-hidden="true" />
+                    <p style={{ margin: 0 }}>
+                      <span className={styles.ticketLabel}>Reference</span>
+                      <br />
+                      <span className={styles.ref}>{booking.bookingRef}</span>
+                    </p>
+                    <button className={`btn ${styles.ticketButton}`} type="button" onClick={downloadTicket} disabled={downloading}>
+                      {downloading ? "Preparing ticket…" : "Download ticket (PDF)"}
+                    </button>
+                    <p className={styles.ticketContact}>
+                      Please contact {ARRANGEMENTS_CONTACT.name} for arrangements.
+                      <br />
+                      Contact number:{" "}
+                      <a href={`tel:+91${ARRANGEMENTS_CONTACT.phone}`} className={styles.ticketPhone}>
+                        {ARRANGEMENTS_CONTACT.phone}
+                      </a>
+                    </p>
+                    <p className="muted small" style={{ margin: 0 }}>
+                      Keep this reference. To change or cancel a booking, contact the organisers.
+                    </p>
+                  </section>
+                ) : hold ? (
+                  <HoldPanel
+                    hold={hold}
+                    offsetMs={offsetMs}
+                    busy={busy}
+                    onConfirm={() => setConfirmOpen(true)}
+                    onRelease={releaseHold}
+                    onExpired={onExpired}
+                  />
+                ) : (
+                  <section className={styles.panel} aria-labelledby="selection-title" data-testid="selection-panel">
+                    <h2 id="selection-title" className={styles.panelTitle}>
+                      {selected ? `Stall ${selected.code}` : "Select a stall"}
+                    </h2>
+                    {selected ? (
+                      <>
+                        <p className={styles.chip} data-status={selected.status}>
+                          {stallMark(selected) && <span aria-hidden="true">{stallMark(selected)}</span>}
+                          <span>
+                            Status: <strong>{stallLabel(selected)}</strong>
+                          </span>
+                        </p>
+                        <dl className={styles.facts}>
+                          <div>
+                            <dt>Area</dt>
+                            <dd>{snapshot.zones.find((z) => z.code === selected.zone)?.name ?? selected.zone}</dd>
+                          </div>
+                          <div>
+                            <dt>Size</dt>
+                            <dd>
+                              {selected.w} × {selected.d} ft
+                            </dd>
+                          </div>
+                        </dl>
+                        <button className={`btn btn-primary ${styles.bigButton}`} type="button" onClick={bookStall} disabled={busy || !canHold}>
+                          {busy ? "Reserving…" : "Book my stall"}
+                        </button>
+                        <p className="muted small" style={{ margin: 0 }}>
+                          The stall is kept for you for 5 minutes while you confirm. Your team can book one stall.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="muted small" style={{ margin: 0 }}>
+                        Choose a white stall on the map or in the list.{" "}
+                        {zone ? `${freeByZone.get(zone.code) ?? 0} stalls are free in ${zone.name}.` : ""}
+                      </p>
+                    )}
+                  </section>
+                )}
+              </aside>
+            </div>
+          </>
+        )}
+
+        {justBooked && (
+          <BookedDialog
+            stallCode={justBooked.stallCode}
+            bookingRef={justBooked.bookingRef}
+            downloading={downloading}
+            onDownload={downloadTicket}
+            onClose={() => setJustBooked(null)}
+          />
+        )}
+
+        {confirmOpen && hold && (
+          <ConfirmDialog
+            stallCode={hold.stallCode}
+            expiresAt={hold.expiresAt}
+            offsetMs={offsetMs}
+            busy={busy}
+            onConfirm={confirmBooking}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        )}
+      </div>
+    </>
   );
 }

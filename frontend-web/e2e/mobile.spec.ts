@@ -18,7 +18,8 @@ test("E2E-07: on a phone the list is the default view and booking works from it"
   await expect(page.locator("svg [data-stall-code]")).toHaveCount(0);
 
   await row.getByRole("button", { name: "Select stall PG-A03" }).click();
-  await page.getByRole("button", { name: "Hold this stall for 5 minutes" }).click();
+  await page.getByRole("button", { name: "Book my stall" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Not now" }).click();
   await expect(page.getByTestId("hold-panel")).toContainText("PG-A03");
   await expect(row).toContainText("Held by you");
 

@@ -15,6 +15,7 @@ export const E2E_ENV = {
   RATE_LIMIT_HASH_KEY: "e2e-rate-limit-key-0123456789abcdef01",
   HOLD_TOKEN_KEYS: "e2e:e2e-hold-token-key-0123456789abcdef0",
   FEATURE_BOOKING_UI: "true",
+  REGISTRATION_MIN_FILL_SECONDS: "0",
 };
 
 /** The guarded e2e database on the developer-supplied local test server. */

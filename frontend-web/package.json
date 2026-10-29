@@ -12,7 +12,9 @@
     "test:db": "vitest run --project db",
     "test:e2e": "playwright test",
     "test-db:start": "node scripts/test-db.mjs start",
-    "test-db:stop": "node scripts/test-db.mjs stop"
+    "test-db:stop": "node scripts/test-db.mjs stop",
+    "preflight": "node --experimental-transform-types --no-warnings --import ./scripts/node-ts-hooks.mjs scripts/preflight.mts",
+    "mail:check": "node --experimental-transform-types --no-warnings --import ./scripts/node-ts-hooks.mjs scripts/mail-check.mts"
   },
   "dependencies": {
     "jose": "6.2.12",

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as route from "@/app/v1/[...route]/route";
 import { closeDb, getDb } from "@/lib/db";
 import { capturedMailForTests } from "@/lib/mail";
+import { nextAadhaar, prepareRegistration, registerVerified, requestRegistrationCode, submitRegistration } from "../support/registration";
 
 let counter = 0;
 const PHOTO = "https://ik.imagekit.io/test/photo.jpg";
@@ -26,22 +27,17 @@ function payload(overrides: Record<string, unknown> = {}) {
     state: "Odisha",
     country: "India",
     linkedinUrl: "in/leader",
-    aadharNumber: "123412341234",
+    aadharNumber: nextAadhaar(),
     members: [{ name: `Member ${counter}`, photoUrl: PHOTO, phone: "9123456780", email: `member${counter}@example.test` }],
     ...overrides,
   };
 }
 
 let ip = 0;
-async function register(body: unknown, clientIp = `10.1.${Math.floor(++ip / 250)}.${ip % 250}`) {
-  const res = await route.POST(
-    new Request("http://localhost/v1/auth/register", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-forwarded-for": clientIp },
-      body: JSON.stringify(body),
-    })
-  );
-  return { status: res.status, json: (await res.json()) as Record<string, any> };
+/** A scripted (not same-origin) registration that has verified its email, as every registration must. */
+async function register(body: Record<string, any>, clientIp = `10.1.${Math.floor(++ip / 250)}.${ip % 250}`) {
+  const { status, json } = await registerVerified(body, { sameOrigin: false, ip: clientIp });
+  return { status, json };
 }
 
 async function rowCounts(email: string) {
@@ -120,9 +116,14 @@ describe("REG-02 no takeover by resubmission", () => {
   it("rejects a second registration for the same email in the same track, leaving data unchanged", async () => {
     const first = payload();
     expect((await register(first)).status).toBe(200);
+    // No code is issued for an address that is already registered...
+    const code = await requestRegistrationCode(first.email);
+    expect(code.status).toBe(409);
+    expect(code.body.error.code).toBe("ALREADY_REGISTERED");
+    // ...so a resubmission cannot pass email verification either.
     const { status, json } = await register({ ...payload(), email: first.email, teamName: "Hijacked Team" });
-    expect(status).toBe(409);
-    expect(json.code).toBe("ALREADY_REGISTERED");
+    expect(status).toBe(400);
+    expect(json.code).toBe("EMAIL_CODE_INVALID");
 
     const sql = await getDb();
     const [stl] = await sql`select team_name from startup_team_leaders where lower(email) = ${first.email}`;
@@ -133,16 +134,19 @@ describe("REG-02 no takeover by resubmission", () => {
   it("rejects a registration of the same email in the other track", async () => {
     const first = payload();
     expect((await register(first)).status).toBe(200);
-    expect((await register({ ...payload({ category: "student_innovator" }), email: first.email })).status).toBe(409);
+    expect((await register({ ...payload({ category: "student_innovator" }), email: first.email })).status).toBe(400);
+    expect((await requestRegistrationCode(first.email)).status).toBe(409);
     expect(await rowCounts(first.email)).toEqual({ accounts: 1, senior: 1, junior: 0, teams: 1 });
   });
 
   it("serialises concurrent first registrations of one email: exactly one succeeds", async () => {
     const email = `race${++counter}@example.test`;
+    // Three browsers each verified the email before any of them submitted (3 codes per 15 minutes).
+    const prepared = [await prepareRegistration(email), await prepareRegistration(email), await prepareRegistration(email)];
     const results = await Promise.all(
-      Array.from({ length: 5 }, (_, i) => register({ ...payload(), email, teamName: `Race ${i}` }))
+      prepared.map((p, i) => submitRegistration({ ...payload(), email, teamName: `Race ${i}` }, p, { sameOrigin: false }))
     );
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409, 409, 409, 409]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409, 409]);
     expect(await rowCounts(email)).toEqual({ accounts: 1, senior: 1, junior: 0, teams: 1 });
   });
 
@@ -243,10 +247,11 @@ describe("REG-04/05 atomicity and sanitised errors", () => {
 
 describe("REG-06/07/08 response, email and team identity", () => {
   it("does not echo Aadhaar or PAN numbers in the response (R-11)", async () => {
-    const { json } = await register(payload({ panNumber: "ABCDE1234F" }));
+    const body = payload({ panNumber: "ABCDE1234F" });
+    const { json } = await register(body);
     expect(json.user).not.toHaveProperty("aadharNumber");
     expect(json.user).not.toHaveProperty("panNumber");
-    expect(JSON.stringify(json)).not.toContain("123412341234");
+    expect(JSON.stringify(json)).not.toContain(body.aadharNumber);
   });
 
   it("escapes submitted values in the confirmation email (R-10)", async () => {

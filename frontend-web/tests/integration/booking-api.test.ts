@@ -153,7 +153,10 @@ describe("authorisation, IDOR, CSRF and tokens", () => {
     const wrongHold = await confirm(leader.cookie, second.body!.holdId, first.body!.token);
     expect(wrongHold.body!.error.code).toBe("INVALID_HOLD_TOKEN");
     const token: string = second.body!.token;
-    const flipped = token.slice(0, -1) + (token.endsWith("A") ? "B" : "A");
+    // Alter a middle character: the last base64url character also carries padding bits,
+    // so changing it can leave the decoded signature unchanged (a flaky "tamper").
+    const at = token.length - 10;
+    const flipped = token.slice(0, at) + (token[at] === "A" ? "B" : "A") + token.slice(at + 1);
     expect((await confirm(leader.cookie, second.body!.holdId, flipped)).body!.error.code).toBe("INVALID_HOLD_TOKEN");
     const unknownKid = token.replace(/^v1\.t1\./, "v1.zz.");
     expect((await confirm(leader.cookie, second.body!.holdId, unknownKid)).body!.error.code).toBe("INVALID_HOLD_TOKEN");

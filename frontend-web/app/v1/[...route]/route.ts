@@ -1,12 +1,25 @@
 import { scryptSync, randomBytes, randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
-import { ConfigError, getImageKitConfig } from "@/lib/config";
+import { SESSION_COOKIE, sessionTokenFrom } from "@/lib/auth/session";
+import { ConfigError, getFeatureFlags, getImageKitConfig } from "@/lib/config";
 import { getDb } from "@/lib/db";
-import { clientAddress, HttpError } from "@/lib/http";
+import { isSafeEmailAddress } from "@/lib/email-address";
+import { assertSameOriginJson, clientAddress, HttpError, sessionCookie } from "@/lib/http";
 import { sendMail } from "@/lib/mail";
 import { buildConfirmationEmail } from "@/lib/registration/confirmation-email";
-import { AlreadyRegisteredError, persistRegistration, type RegistrationInput } from "@/lib/registration/persist";
+import { clearedOtpBindingCookie, otpBindingFrom } from "@/lib/auth/otp";
+import { isValidAadhaar } from "@/lib/registration/aadhaar";
+import { verifyRegistrationCode } from "@/lib/registration/email-verification";
+import { checkCaptcha } from "@/lib/registration/captcha";
+import { checkFormToken, checkHoneypot } from "@/lib/registration/form-guard";
+import {
+  AadhaarAlreadyRegisteredError,
+  AlreadyRegisteredError,
+  persistRegistration,
+  type RegistrationInput,
+} from "@/lib/registration/persist";
+import { isAcceptablePhoto, isAcceptableReport, readLimitedText } from "@/lib/registration/uploads";
 import { TestDatabaseGuardError } from "@/lib/safety/test-database-guard";
 
 export const dynamic = "force-dynamic";
@@ -85,7 +98,18 @@ function normalizeMobileNumber(input: string): string | null {
   return null;
 }
 
+/** Set once the database is known to be managed by scripts/migrate.mts. */
+let schemaManagedByMigrations = false;
+
 async function ensureTables(sql: postgres.Sql) {
+  // A database managed by the migration runner already has this schema, and the least-privilege
+  // runtime role (isf_app) may not run DDL, so skip the legacy runtime creation there (R-08).
+  if (schemaManagedByMigrations) return;
+  const [managed] = await sql`select to_regclass('public.schema_migrations') is not null as yes`;
+  if (managed?.yes) {
+    schemaManagedByMigrations = true;
+    return;
+  }
   try {
     await sql.unsafe(`
       create table if not exists event_editions (
@@ -265,7 +289,20 @@ async function handleRequest(request: Request) {
       await consumeRateLimit(sql, LIMITS.registrationPerIp, clientAddress(request));
       await ensureTables(sql);
 
-      const body = await request.json();
+      let body: any;
+      try {
+        body = JSON.parse(await readLimitedText(request));
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        throw new HttpError(400, "VALIDATION", "Request body must be valid JSON.");
+      }
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        throw new HttpError(400, "VALIDATION", "Request body must be a JSON object.");
+      }
+      // Bot filters first: a hidden field people never fill, and a minimum time to fill the form in.
+      checkHoneypot(body);
+      checkFormToken(body.formToken);
+      await checkCaptcha(body.captchaToken, clientAddress(request));
       const email = String(body.email || "").toLowerCase().trim();
       const fullName = String(body.fullName || "").trim();
       const password = typeof body.password === "string" ? body.password.trim() : "";
@@ -309,7 +346,8 @@ async function handleRequest(request: Request) {
       }));
 
       // Validation
-      if (!email || !email.includes("@")) {
+      // Plain single addresses only (also keeps crafted input away from the mail address parser).
+      if (!email || !isSafeEmailAddress(email)) {
         return Response.json({ message: "A valid email address is required." }, { status: 400 });
       }
       if (!fullName) {
@@ -324,6 +362,15 @@ async function handleRequest(request: Request) {
       }
       if (!photoUrl) {
         return Response.json({ message: "Team lead photograph is required." }, { status: 400 });
+      }
+      if (!isAcceptablePhoto(photoUrl)) {
+        return Response.json({ message: "Team lead photograph must be a JPEG, PNG or WebP image." }, { status: 400 });
+      }
+      if (rawProjectReport && !isAcceptableReport(rawProjectReport)) {
+        return Response.json(
+          { message: "Project report must be a PDF, Word, PowerPoint or image file under 20 MB, or an https:// link." },
+          { status: 400 }
+        );
       }
       if (!mobile) {
         return Response.json(
@@ -352,8 +399,11 @@ async function handleRequest(request: Request) {
       if (!linkedinUrl) {
         return Response.json({ message: "LinkedIn profile URL is required." }, { status: 400 });
       }
-      if (!aadharNumber || aadharNumber.length !== 12 || !/^\d{12}$/.test(aadharNumber)) {
-        return Response.json({ message: "A valid 12-digit Aadhaar Card number is required." }, { status: 400 });
+      if (!aadharNumber || !isValidAadhaar(aadharNumber)) {
+        return Response.json(
+          { message: "A valid 12-digit Aadhaar Card number is required. Please check it against your Aadhaar card." },
+          { status: 400 }
+        );
       }
       if (members.length === 0) {
         return Response.json({ message: "At least one team member detail is required (max 5 members)." }, { status: 400 });
@@ -363,8 +413,11 @@ async function handleRequest(request: Request) {
         const m = members[i];
         if (!m.name) return Response.json({ message: `Member #${i + 1} name is required.` }, { status: 400 });
         if (!m.photoUrl) return Response.json({ message: `Member #${i + 1} (${m.name}) photo is required.` }, { status: 400 });
+        if (!isAcceptablePhoto(m.photoUrl)) {
+          return Response.json({ message: `Member #${i + 1} (${m.name}) photo must be a JPEG, PNG or WebP image.` }, { status: 400 });
+        }
         if (!m.phone) return Response.json({ message: `Member #${i + 1} (${m.name}) phone number is required.` }, { status: 400 });
-        if (!m.email || !m.email.includes("@")) return Response.json({ message: `Member #${i + 1} (${m.name}) valid email is required.` }, { status: 400 });
+        if (!m.email || !isSafeEmailAddress(m.email)) return Response.json({ message: `Member #${i + 1} (${m.name}) valid email is required.` }, { status: 400 });
         if (m.email === email) {
           return Response.json({ message: `Member #${i + 1} (${m.name}) cannot use the team leader's email address.` }, { status: 400 });
         }
@@ -372,6 +425,9 @@ async function handleRequest(request: Request) {
           return Response.json({ message: `Member #${i + 1} (${m.name}) uses an email address already listed for another member.` }, { status: 400 });
         }
       }
+
+      // The leader must have proved control of the email with the code we sent to it.
+      const emailChallengeId = await verifyRegistrationCode(sql, email, body.emailCode, otpBindingFrom(request));
 
       // Upload leader photo to ImageKit if base64
       let storedLeaderPhoto = photoUrl;
@@ -418,9 +474,24 @@ async function handleRequest(request: Request) {
         members: members.map((m) => ({ name: m.name, photoUrl: m.photoUrl || null, phone: m.phone, email: m.email })),
       };
 
-      let userId: string;
+      // Only the site's own registration form (same-origin JSON) may receive a session;
+      // anything else still registers but signs in later with an emailed code.
+      let sameOrigin = false;
       try {
-        ({ userId } = await persistRegistration(sql, registration));
+        assertSameOriginJson(request);
+        sameOrigin = true;
+      } catch {
+        sameOrigin = false;
+      }
+
+      let userId: string;
+      let session: Awaited<ReturnType<typeof persistRegistration>>["session"];
+      try {
+        ({ userId, session } = await persistRegistration(sql, registration, {
+          emailChallengeId,
+          startSession: sameOrigin,
+          replacedToken: sameOrigin ? sessionTokenFrom(request, "leader") : null,
+        }));
       } catch (err) {
         if (err instanceof AlreadyRegisteredError) {
           return Response.json(
@@ -428,6 +499,15 @@ async function handleRequest(request: Request) {
               code: "ALREADY_REGISTERED",
               message:
                 "This email address is already registered. To change your registration details, please contact the organisers.",
+            },
+            { status: 409 }
+          );
+        }
+        if (err instanceof AadhaarAlreadyRegisteredError) {
+          return Response.json(
+            {
+              code: "AADHAAR_ALREADY_REGISTERED",
+              message: "This Aadhaar number is already used by another registration. If this is a mistake, please contact the organisers.",
             },
             { status: 409 }
           );
@@ -442,8 +522,19 @@ async function handleRequest(request: Request) {
         console.error("[REGISTRATION EMAIL ERROR]", { name: e?.name, code: e?.code, message: e?.message });
       }
 
+      // The session row was committed with the registration; the cookie is sent only now.
+      const headers = new Headers({ "Cache-Control": "private, no-store" });
+      if (session) headers.append("Set-Cookie", sessionCookie(SESSION_COOKIE.leader, session.token, session.maxAgeSeconds));
+      headers.append("Set-Cookie", clearedOtpBindingCookie());
+      const bookingUi = getFeatureFlags().bookingUi;
+
       return Response.json({
         ok: true,
+        booking: {
+          // Where the page should go next: straight to booking when signed in, otherwise sign in first.
+          next: !bookingUi ? null : session ? "/book-your-stall" : "/login?next=/book-your-stall",
+          signedIn: Boolean(session),
+        },
         user: {
           id: userId,
           email,
@@ -458,7 +549,7 @@ async function handleRequest(request: Request) {
           membersCount: members.length,
         },
         message: "Registration successful! Your application has been recorded in the summit database.",
-      });
+      }, { headers });
     } catch (err: any) {
       const requestId = randomUUID();
       // Log identifiers only: driver errors can carry submitted values in their detail fields.

@@ -1,5 +1,11 @@
 "use client";
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { isValidAadhaar } from "@/lib/registration/aadhaar";
+import { safeNextPath } from "@/lib/safe-redirect";
+import { EmailVerificationField } from "./email-verification-field";
+import verificationStyles from "./email-verification.module.css";
+import { BookStallSection, RegistrationHandoff } from "./registration-handoff";
+import { TurnstileWidget } from "./turnstile-widget";
 
 type CategoryId =
   | "startup_founder"
@@ -200,6 +206,23 @@ export default function RegisterPage() {
   ]);
 
   const [busy, setBusy] = useState(false);
+  // Email proof and bot filters (server checks all three).
+  const [emailCode, setEmailCode] = useState("");
+  const [formToken, setFormToken] = useState<string | null>(null);
+  const [website, setWebsite] = useState("");
+  // Optional Cloudflare human check (only when a site key is configured).
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaSiteKey, setCaptchaSiteKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/v1/auth/register/form-token", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setFormToken(typeof d?.token === "string" ? d.token : null);
+        setCaptchaSiteKey(typeof d?.captchaSiteKey === "string" ? d.captchaSiteKey : null);
+      })
+      .catch(() => setFormToken(null));
+  }, []);
   const [error, setError] = useState<string | null>(null);
 
   function handleFormError(msg: string) {
@@ -209,6 +232,8 @@ export default function RegisterPage() {
     }
   }
 
+  // Set from the server's reply: where booking continues after registration.
+  const [handoff, setHandoff] = useState<{ next: string; signedIn: boolean } | null>(null);
   const [registered, setRegistered] = useState<{
     email: string;
     fullName: string;
@@ -358,6 +383,14 @@ export default function RegisterPage() {
       handleFormError("Please provide a valid official email address.");
       return;
     }
+    if (captchaSiteKey && !captchaToken) {
+      handleFormError("Please complete the human check above the submit button.");
+      return;
+    }
+    if (!/^\d{6}$/.test(emailCode)) {
+      handleFormError("Please verify your email: click “Send verification code” and enter the 6-digit code we emailed you.");
+      return;
+    }
     if (!fullName.trim()) {
       handleFormError("Please enter your full name.");
       return;
@@ -400,8 +433,8 @@ export default function RegisterPage() {
         return;
       }
       const cleanAadhar = aadharNumber.replace(/[\s-]/g, "");
-      if (cleanAadhar.length !== 12 || !/^\d{12}$/.test(cleanAadhar)) {
-        handleFormError("Please enter a valid 12-digit Aadhaar Card number (e.g. 1234 5678 9012).");
+      if (!isValidAadhaar(cleanAadhar)) {
+        handleFormError("Please enter a valid 12-digit Aadhaar Card number, exactly as printed on your Aadhaar card.");
         return;
       }
       if (panNumber.trim()) {
@@ -495,10 +528,17 @@ export default function RegisterPage() {
           mobile: finalMobile,
           altMobile: finalAltMobile || null,
           password,
+          emailCode,
+          formToken,
+          website,
+          captchaToken,
         }),
       });
 
-      const data = await res.json();
+      // A server or proxy failure can return an HTML page; show a plain message, not a parser error.
+      const data = await res.json().catch(() => ({
+        message: `The server could not process the registration right now (status ${res.status}). Please try again in a moment.`,
+      }));
 
       if (!res.ok) {
         const baseMsg = data.message || "Registration failed. Please verify your details.";
@@ -508,6 +548,9 @@ export default function RegisterPage() {
         return;
       }
 
+      // Same-site paths only (never "//host" or "/\host"), even though the server sends fixed values.
+      const next = safeNextPath(data.booking?.next, "");
+      if (next) setHandoff({ next, signedIn: data.booking.signedIn === true });
       setRegistered({
         email: normEmail,
         fullName: fullName.trim(),
@@ -539,6 +582,7 @@ export default function RegisterPage() {
   if (registered) {
     return (
       <div className="confirmed-view-wrap">
+        {handoff && <RegistrationHandoff next={handoff.next} signedIn={handoff.signedIn} teamName={registered.teamName || "Your team"} />}
         <style jsx>{`
           .confirmed-view-wrap {
             max-width: 820px;
@@ -865,6 +909,7 @@ export default function RegisterPage() {
             </div>
           </div>
         </div>
+        {handoff && <BookStallSection next={handoff.next} signedIn={handoff.signedIn} />}
       </div>
     );
   }
@@ -2064,6 +2109,11 @@ export default function RegisterPage() {
                           onChange={(e) => setEmail(e.target.value)}
                         />
                       </div>
+                      <EmailVerificationField email={email} code={emailCode} onCodeChange={setEmailCode} />
+                      <div className={verificationStyles.trap} aria-hidden="true">
+                        <label htmlFor="website">Leave this field empty</label>
+                        <input id="website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+                      </div>
                     </div>
 
 
@@ -2466,6 +2516,7 @@ export default function RegisterPage() {
               </div>
             )}
 
+            <TurnstileWidget siteKey={captchaSiteKey} onToken={setCaptchaToken} />
             <button type="submit" className="btn-submit-summit" disabled={busy}>
               {busy ? "Registering & Generating Credentials…" : `Complete Registration as ${activeCategory.title} →`}
             </button>

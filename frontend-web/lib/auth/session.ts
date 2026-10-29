@@ -14,10 +14,18 @@ export const SESSION_COOKIE: Record<Audience, string> = {
   admin: "__Host-sj_admin",
 };
 
-const LIFETIME: Record<Audience, { idleMinutes: number; absoluteMinutes: number }> = {
+type Lifetime = { idleMinutes: number; absoluteMinutes: number };
+
+const LIFETIME: Record<Audience, Lifetime> = {
   leader: { idleMinutes: 120, absoluteMinutes: 12 * 60 },
   admin: { idleMinutes: 30, absoluteMinutes: 8 * 60 },
 };
+
+/**
+ * The session handed to a brand-new registrant without an email code: long enough
+ * to go straight on to booking, never longer. Later visits sign in with a code.
+ */
+export const REGISTRATION_HANDOFF_LIFETIME: Lifetime = { idleMinutes: 60, absoluteMinutes: 120 };
 
 export const MAX_LIVE_SESSIONS = 5;
 export const STEP_UP_MINUTES = 10;
@@ -42,10 +50,11 @@ export interface CreatedSession {
 export async function createSession(
   tx: postgres.TransactionSql,
   audience: Audience,
-  principalId: string
+  principalId: string,
+  lifetime: Lifetime = LIFETIME[audience]
 ): Promise<CreatedSession> {
   const token = randomToken();
-  const { idleMinutes, absoluteMinutes } = LIFETIME[audience];
+  const { idleMinutes, absoluteMinutes } = lifetime;
   const userId = audience === "leader" ? principalId : null;
   const adminUserId = audience === "admin" ? principalId : null;
 

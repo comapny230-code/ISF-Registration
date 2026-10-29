@@ -106,6 +106,7 @@ export async function createLeader(opts: { session?: boolean } = {}): Promise<Le
  */
 export async function signIn(context: BrowserContext, leader: Leader) {
   const code = String(100000 + Math.floor(Math.random() * 900000));
+  await requestCodeIn(context, leader.email, "leader");
   await plantLoginCode(leader.email, code);
   const res = await context.request.post(`${E2E_ORIGIN}/v1/auth/otp/verify`, {
     headers: { origin: E2E_ORIGIN, "content-type": "application/json" },
@@ -114,17 +115,49 @@ export async function signIn(context: BrowserContext, leader: Leader) {
   if (res.status() !== 200) throw new Error(`sign-in failed: ${res.status()} ${await res.text()}`);
 }
 
-/** Replaces any pending code for this email with a known one (for the login UI test). */
-export async function plantLoginCode(email: string, code: string) {
+/** Requests a real code from inside the browser context, so the server sets its binding cookie there. */
+async function requestCodeIn(context: BrowserContext, email: string, audience: "leader" | "admin") {
+  const res = await context.request.post(`${E2E_ORIGIN}/v1/auth/otp/request`, {
+    headers: { origin: E2E_ORIGIN, "content-type": "application/json" },
+    data: { email, audience },
+  });
+  if (res.status() !== 202) throw new Error(`code request failed: ${res.status()}`);
+}
+
+/**
+ * Sets the code of the latest pending challenge for this email to a known value. The
+ * challenge keeps its binding, so only the browser that requested it can use the code.
+ */
+async function setPendingCode(audience: "leader" | "admin", email: string, code: string) {
   const s = await db();
-  const id = randomUUID();
-  await s`update app_auth.login_challenges set superseded_at = clock_timestamp()
-          where email = ${email} and consumed_at is null and superseded_at is null`;
+  const [challenge] = await s`
+    select id from app_auth.login_challenges
+     where audience = ${audience} and email = ${email} and consumed_at is null and superseded_at is null
+     order by created_at desc limit 1`;
+  if (!challenge) throw new Error(`no pending ${audience} code for ${email}; request one in the browser first`);
   await s`
-    insert into app_auth.login_challenges (id, audience, email, user_id, code_mac, expires_at)
-    select ${id}, 'leader', ${email}, u.id, ${createHmac("sha256", E2E_ENV.OTP_PEPPER).update(`${id}:${code}`).digest()},
-           clock_timestamp() + interval '10 minutes'
-      from user_accounts u where lower(u.email) = ${email}`;
+    update app_auth.login_challenges
+       set code_mac = ${createHmac("sha256", E2E_ENV.OTP_PEPPER).update(`${challenge.id}:${code}`).digest()}, attempts = 0
+     where id = ${challenge.id}`;
+}
+
+/** Replaces the registration email code the browser just requested with a known one. */
+export async function plantRegistrationCode(email: string, code: string) {
+  const s = await db();
+  const [challenge] = await s`
+    select id from app_auth.registration_email_challenges
+     where email = ${email} and consumed_at is null and superseded_at is null
+     order by created_at desc limit 1`;
+  if (!challenge) throw new Error(`no pending registration code for ${email}; click Send verification code first`);
+  await s`
+    update app_auth.registration_email_challenges
+       set code_mac = ${createHmac("sha256", E2E_ENV.OTP_PEPPER).update(`register:${challenge.id}:${code}`).digest()}, attempts = 0
+     where id = ${challenge.id}`;
+}
+
+/** Replaces the code the browser just requested with a known one (for the login UI test). */
+export async function plantLoginCode(email: string, code: string) {
+  await setPendingCode("leader", email, code);
 }
 
 export interface AdminUser {
@@ -145,20 +178,13 @@ export async function createAdminUser(permissions: string[]): Promise<AdminUser>
   return { id: admin.id, email, name };
 }
 
-/** Replaces any pending administrator code with a known one. */
+/** Replaces the administrator code the browser just requested with a known one. */
 export async function plantAdminCode(email: string, code: string) {
-  const s = await db();
-  const id = randomUUID();
-  await s`update app_auth.login_challenges set superseded_at = clock_timestamp()
-          where audience = 'admin' and email = ${email} and consumed_at is null and superseded_at is null`;
-  await s`
-    insert into app_auth.login_challenges (id, audience, email, admin_user_id, code_mac, expires_at)
-    select ${id}, 'admin', ${email}, a.id, ${createHmac("sha256", E2E_ENV.OTP_PEPPER).update(`${id}:${code}`).digest()},
-           clock_timestamp() + interval '10 minutes'
-      from app_auth.admin_users a where a.email = ${email}`;
+  await setPendingCode("admin", email, code);
 }
 
 export async function signInAdmin(context: BrowserContext, admin: AdminUser) {
+  await requestCodeIn(context, admin.email, "admin");
   await plantAdminCode(admin.email, "135790");
   const res = await context.request.post(`${E2E_ORIGIN}/v1/auth/otp/verify`, {
     headers: { origin: E2E_ORIGIN, "content-type": "application/json" },

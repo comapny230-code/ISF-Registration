@@ -7,9 +7,13 @@
  * - Existing user_accounts rows are never updated (leader or member).
  * - Each new leader gets their own startups row (no matching by team name).
  * - The edition-scoped booking team is created with approval 'pending'.
+ * - The leader's email must have been verified with a registration code (consumed here),
+ *   and an Aadhaar number can lead only one registration.
  */
 import type postgres from "postgres";
 import { EDITION_ID, teamNameSnapshot, type Track } from "../auth/leader";
+import { createSession, REGISTRATION_HANDOFF_LIFETIME, revokeSessionToken, type CreatedSession } from "../auth/session";
+import { HttpError } from "../http";
 
 export interface MemberInput {
   name: string;
@@ -40,6 +44,13 @@ export interface RegistrationInput {
   members: MemberInput[];
 }
 
+export class AadhaarAlreadyRegisteredError extends Error {
+  constructor() {
+    super("aadhaar number already has a leader registration");
+    this.name = "AadhaarAlreadyRegisteredError";
+  }
+}
+
 export class AlreadyRegisteredError extends Error {
   constructor() {
     super("email already has a leader registration");
@@ -47,8 +58,38 @@ export class AlreadyRegisteredError extends Error {
   }
 }
 
-export async function persistRegistration(sql: postgres.Sql, input: RegistrationInput): Promise<{ userId: string; teamId: string }> {
+export interface PersistOptions {
+  /**
+   * The verified registration email challenge (lib/registration/email-verification.ts).
+   * It is consumed in this transaction, so one code saves at most one registration and a
+   * registration that rolls back leaves the code usable.
+   */
+  emailChallengeId: string;
+  /**
+   * Also start a short leader session for the new leader, inside this transaction, so it
+   * exists only if the registration commits. The email has been proved with a code, so
+   * this is safe even when the address already had an account (e.g. as a team member).
+   */
+  startSession?: boolean;
+  /** A leader session token already on this browser; revoked if a new session is started. */
+  replacedToken?: string | null;
+}
+
+export async function persistRegistration(
+  sql: postgres.Sql,
+  input: RegistrationInput,
+  options: PersistOptions
+): Promise<{ userId: string; teamId: string; session: CreatedSession | null }> {
   return sql.begin(async (tx) => {
+    const consumed = await tx`
+      update app_auth.registration_email_challenges set consumed_at = clock_timestamp()
+       where id = ${options.emailChallengeId} and email = ${input.email}
+         and verified_at is not null and consumed_at is null and superseded_at is null and expires_at > clock_timestamp()
+      returning id`;
+    if (consumed.length !== 1) {
+      throw new HttpError(400, "EMAIL_CODE_INVALID", "The email verification code is invalid or has expired. Request a new code and try again.");
+    }
+
     const memberSummary = input.members.map((m, i) => `${i + 1}. ${m.name} (${m.email}, ${m.phone})`).join("; ");
 
     // Create the account if it is new; an existing account is used as-is and never modified.
@@ -74,6 +115,14 @@ export async function persistRegistration(sql: postgres.Sql, input: Registration
       select exists (select 1 from startup_team_leaders where user_id = ${userId})
           or exists (select 1 from student_innovators where user_id = ${userId}) as registered`;
     if (existing.registered) throw new AlreadyRegisteredError();
+
+    // One leader registration per Aadhaar number (both tracks). Concurrent registrations with
+    // the same number serialise on this lock, so only one can pass the check.
+    await tx`select pg_advisory_xact_lock(hashtext(${`isf-aadhaar:${input.aadharNumber}`}))`;
+    const [aadhaar] = await tx`
+      select exists (select 1 from startup_team_leaders where aadhar_number = ${input.aadharNumber} and edition_id = ${EDITION_ID})
+          or exists (select 1 from student_innovators where aadhar_number = ${input.aadharNumber} and edition_id = ${EDITION_ID}) as taken`;
+    if (aadhaar.taken) throw new AadhaarAlreadyRegisteredError();
 
     await tx`insert into role_grants (user_id, role, edition_id) values (${userId}, 'startup_team_leader', ${EDITION_ID}) on conflict do nothing`;
     await tx`insert into edition_access (user_id, edition_id, source) values (${userId}, ${EDITION_ID}, 'predefined') on conflict do nothing`;
@@ -137,6 +186,11 @@ export async function persistRegistration(sql: postgres.Sql, input: Registration
       }
     }
 
-    return { userId, teamId: team.id as string };
+    let session: CreatedSession | null = null;
+    if (options.startSession) {
+      if (options.replacedToken) await revokeSessionToken(tx, options.replacedToken, "rotated");
+      session = await createSession(tx, "leader", userId, REGISTRATION_HANDOFF_LIFETIME);
+    }
+    return { userId, teamId: team.id as string, session };
   });
 }

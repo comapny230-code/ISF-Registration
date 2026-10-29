@@ -128,7 +128,7 @@ describe("inventory, audit and editions (SCH-06, SCH-07)", () => {
     expect(Object.fromEntries(all.map((c) => [c.column_name, c.column_default]))).toEqual({
       booking_enabled: "false",
       hold_seconds: "300",
-      require_team_approval: "true",
+      require_team_approval: "false", // migration 0008: no manual approval (owner decision)
     });
   });
 });

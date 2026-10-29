@@ -1,0 +1,79 @@
+.box {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.send {
+  border: 1px solid var(--color-forest);
+  background: var(--color-forest);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.send:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.send:focus-visible,
+.code:focus-visible {
+  outline: 3px solid var(--color-terracotta);
+  outline-offset: 2px;
+}
+
+.codeLabel {
+  display: grid;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-charcoal-muted);
+}
+
+.code {
+  width: 9.5em;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 1.05rem;
+  letter-spacing: 0.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.code:disabled {
+  background: var(--color-ivory-sub);
+}
+
+.ok,
+.error {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.ok {
+  color: var(--color-forest);
+}
+
+.error {
+  color: var(--danger);
+}
+
+/* Visually hidden trap field: never shown to people, still in the form for bots. */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

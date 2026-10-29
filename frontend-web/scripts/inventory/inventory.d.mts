@@ -22,4 +22,5 @@ export function validateInventory(
   summary: { stalls: number; byZone: Record<string, number>; withCoordinates: number; approved: number; bookable: number };
 };
 export function generateProvisionalSeedSql(rows: InventoryRow[], options: { sourceRef: string }): string;
+export function generateActivationMigrationSql(rows: InventoryRow[], options: { sourceRef: string; approvalRef: string }): string;
 export function renderZonePreview(rows: InventoryRow[], zoneCode: string): string;

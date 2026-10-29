@@ -1,0 +1,372 @@
+/* ---------- Reminder popup (appears 30 s after registration) ---------- */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(8, 26, 20, 0.55);
+  backdrop-filter: blur(3px);
+  animation: backdropIn 420ms ease-out both;
+}
+
+.dialog {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  background: #fff;
+  border-radius: 24px;
+  padding: 32px 28px 24px;
+  text-align: center;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  box-shadow: 0 30px 70px rgba(8, 26, 20, 0.32);
+  animation: dialogIn 520ms cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
+}
+
+/* Closing plays the opening in reverse before the popup is removed. */
+.closing {
+  animation: backdropOut 260ms ease-in both;
+}
+
+.closing .dialog {
+  animation: dialogOut 260ms ease-in both;
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+}
+
+@keyframes backdropOut {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.94);
+  }
+}
+
+@keyframes dialogOut {
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+.check {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-forest);
+  color: var(--color-gold-light);
+  font-size: 1.6rem;
+  font-weight: 800;
+  animation: checkPop 600ms 260ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+@keyframes checkPop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+.title {
+  font-family: "Playfair Display", var(--font-serif);
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--color-forest);
+}
+
+.text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.go {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--color-terracotta);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.go:hover {
+  background: var(--color-terracotta-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(232, 112, 66, 0.35);
+}
+
+.go:focus-visible,
+.close:focus-visible,
+.sectionButton:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 3px;
+}
+
+.auto {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-charcoal-mid);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.close:hover {
+  background: var(--color-ivory-sub);
+  transform: rotate(90deg);
+}
+
+/* ---------- "Next step: book your stall" under the registration details ---------- */
+
+.section {
+  position: relative;
+  overflow: hidden;
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px 32px;
+  padding: 32px 32px 30px;
+  border-radius: 24px;
+  color: #fff;
+  text-align: left;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(37, 111, 87, 0.9) 0%, transparent 55%),
+    radial-gradient(80% 120% at 0% 100%, rgba(214, 178, 94, 0.18) 0%, transparent 60%),
+    var(--color-forest-dark);
+  box-shadow: 0 24px 50px -18px rgba(8, 26, 20, 0.55);
+  animation: sectionIn 700ms 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* A faint stall-grid texture, like the ground plan. */
+.section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(90deg, transparent, #000 60%);
+  pointer-events: none;
+}
+
+@keyframes sectionIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+.sectionBody {
+  position: relative;
+  display: grid;
+  gap: 10px;
+}
+
+.stepChip {
+  justify-self: start;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-forest-deep);
+  background: var(--color-gold);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: "Playfair Display", var(--font-serif);
+  font-weight: 800;
+  font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+  line-height: 1.12;
+  color: #fff;
+}
+
+.sectionText {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.sectionButton {
+  position: relative;
+  overflow: hidden;
+  justify-self: start;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 26px;
+  border-radius: 12px;
+  background: var(--color-terracotta);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.08rem;
+  text-decoration: none;
+  box-shadow: 0 10px 24px -8px rgba(232, 112, 66, 0.7);
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+/* A light sweep across the button on hover. */
+.sectionButton::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-20deg);
+}
+
+.sectionButton:hover {
+  background: var(--color-terracotta-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px -10px rgba(232, 112, 66, 0.8);
+}
+
+.sectionButton:hover::after {
+  animation: shine 750ms ease;
+}
+
+@keyframes shine {
+  to {
+    left: 130%;
+  }
+}
+
+.buttonIcon {
+  transition: transform 180ms ease;
+}
+
+.sectionButton:hover .buttonIcon {
+  transform: translateX(4px);
+}
+
+/* Miniature stall map: free, booked and "yours" (gently glowing). */
+.miniMap {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, 26px);
+  gap: 6px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transform: rotate(-3deg);
+}
+
+.miniStall {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(20, 62, 48, 0.25);
+}
+
+.miniBooked {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
+.miniYours {
+  background: var(--color-terracotta);
+  box-shadow: 0 0 0 0 rgba(232, 112, 66, 0.7);
+  animation: yoursPulse 2.2s ease-out infinite;
+}
+
+@keyframes yoursPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(232, 112, 66, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(232, 112, 66, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 112, 66, 0);
+  }
+}
+
+.miniCaption {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .section {
+    grid-template-columns: 1fr;
+    padding: 26px 22px;
+  }
+
+  .miniMap {
+    justify-self: center;
+    order: -1;
+  }
+
+  .sectionButton {
+    justify-self: stretch;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog,
+  .closing,
+  .closing .dialog,
+  .check,
+  .section,
+  .miniYours {
+    animation: none;
+  }
+
+  .sectionButton:hover::after {
+    animation: none;
+  }
+
+  .go,
+  .close,
+  .sectionButton,
+  .buttonIcon {
+    transition: none;
+  }
+}

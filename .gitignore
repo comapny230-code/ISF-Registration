@@ -22,3 +22,6 @@ frontend-console/AGENTS.md
 # Playwright output
 test-results/
 playwright-report/
+
+# Load-test fixtures (contain session tokens)
+.load/

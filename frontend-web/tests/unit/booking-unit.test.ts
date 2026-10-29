@@ -35,6 +35,20 @@ describe("hold tokens (AUTH-13/14)", () => {
     expect(verifyHoldToken(oldToken, "h", "t", "1")).toBe(false);
   });
 
+  it("accepts only the canonical spelling of a signature (no padding-bit variants)", () => {
+    const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    // Try several holds so both cases of the last character are exercised.
+    for (let i = 0; i < 8; i++) {
+      const token = issueHoldToken(`hold-${i}`, "team-1", "1000");
+      const sig = token.split(".")[2];
+      // 32 bytes → 43 characters; the last one holds 4 data bits and 2 padding bits.
+      const variant = sig.slice(0, -1) + B64URL[B64URL.indexOf(sig.at(-1)!) ^ 1];
+      expect(Buffer.from(variant, "base64url").equals(Buffer.from(sig, "base64url"))).toBe(true);
+      expect(verifyHoldToken(`${token.slice(0, token.lastIndexOf(".") + 1)}${variant}`, `hold-${i}`, "team-1", "1000")).toBe(false);
+      expect(verifyHoldToken(token, `hold-${i}`, "team-1", "1000")).toBe(true);
+    }
+  });
+
   it("validates key configuration", () => {
     for (const bad of ["", "nokey", `UPPER:${KEY}`, "k1:short", `k1:${KEY},k1:${KEY}`]) {
       expect(() => getBookingConfig({ APP_ENV: "test", HOLD_TOKEN_KEYS: bad })).toThrow(ConfigError);

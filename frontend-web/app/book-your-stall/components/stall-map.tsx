@@ -25,6 +25,20 @@ export function StallPatterns() {
           <rect width="3" height="3" fill="#e7e5e4" />
           <path d="M0 0L3 3M3 0L0 3" stroke="#a8a29e" strokeWidth="0.4" />
         </pattern>
+        {/* Ground surfaces, in feet: mown turf stripes and a poured court. */}
+        <pattern id="surface-turf" width="40" height="40" patternUnits="userSpaceOnUse">
+          <rect width="40" height="40" fill="#cfe3c9" />
+          <rect width="20" height="40" fill="#c3dcbc" />
+        </pattern>
+        <pattern id="surface-court" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect width="12" height="12" fill="#efe6d6" />
+          <circle cx="3" cy="4" r="0.35" fill="#dccdb3" />
+          <circle cx="9" cy="9" r="0.3" fill="#dccdb3" />
+        </pattern>
+        <pattern id="surface-helipad" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="4" height="4" fill="#ece8e1" />
+          <rect width="2" height="4" fill="#e2ddd4" />
+        </pattern>
       </defs>
     </svg>
   );
@@ -37,10 +51,66 @@ export function stallClass(stall: SnapshotStall, selected: boolean): string {
 }
 
 /**
- * Draws stalls at their surveyed coordinates (feet). Stalls without geometry are
- * never placed on the map; the caller shows the list instead.
+ * Zoom levels in pixels per foot. "fit" shows the whole ground in the column; the
+ * others keep 10 ft stalls large enough to read and tap, and the ground scrolls.
  */
-export function StallMap({ zone, stalls, selectedId, onSelect }: Props) {
+export const ZOOM_LEVELS = ["fit", 3.2, 4.5, 6] as const;
+export type Zoom = (typeof ZOOM_LEVELS)[number];
+/** Upper bound for "fit", so a narrow ground is not stretched across a wide column. */
+const FIT_MAX_PX_PER_FT = 5;
+
+/** Ground surface per area; unknown areas get a plain surface. */
+const SURFACES: Record<string, string> = { PG: "url(#surface-turf)", BB: "url(#surface-court)" };
+
+type Landmark = Zone["landmarks"][number];
+const placedLandmark = (l: Landmark): l is Landmark & { x: number; y: number; w: number; d: number } =>
+  [l.x, l.y, l.w, l.d].every((v) => typeof v === "number");
+
+/** Roads, lanes, stages, rooms and other features drawn behind the stalls (not selectable). */
+function Landmarks({ landmarks }: { landmarks: Landmark[] }) {
+  return (
+    <g aria-hidden="true">
+      {landmarks.filter(placedLandmark).map((l) => {
+        const vertical = l.d > l.w * 2;
+        const [along, across] = vertical ? [l.d, l.w] : [l.w, l.d];
+        // Fit the label inside its box (bold text is roughly 0.62 em per character).
+        const size = Math.min(5, across * 0.6, (along * 0.9) / (l.label.length * 0.62));
+        const cx = l.x + l.w / 2;
+        const cy = l.y + l.d / 2;
+        return (
+          <g key={`${l.label}-${l.x}-${l.y}`} className={`${styles.landmark} ${styles[`landmark_${l.kind}`] ?? ""}`}>
+            <rect x={l.x} y={l.y} width={l.w} height={l.d} rx={l.kind === "stage" || l.kind === "reserved" ? 1.5 : 0} />
+            {l.kind === "road" && (
+              <line
+                className={styles.roadLine}
+                x1={vertical ? cx : l.x + 3}
+                y1={vertical ? l.y + 3 : cy}
+                x2={vertical ? cx : l.x + l.w - 3}
+                y2={vertical ? l.y + l.d - 3 : cy}
+              />
+            )}
+            <text
+              x={cx}
+              y={cy}
+              textAnchor="middle"
+              dominantBaseline="central"
+              style={{ fontSize: size }}
+              transform={vertical ? `rotate(-90 ${cx} ${cy})` : undefined}
+            >
+              {l.label}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Draws stalls (and any positioned landmarks) at their coordinates in feet. Stalls
+ * without geometry are never placed on the map; the caller lists them instead.
+ */
+export function StallMap({ zone, stalls, selectedId, onSelect, zoom = 3.2 }: Props & { zoom?: Zoom }) {
   const placed = stalls.filter(hasGeometry);
   if (placed.length === 0) return null;
 
@@ -51,11 +121,19 @@ export function StallMap({ zone, stalls, selectedId, onSelect }: Props) {
   return (
     <svg
       className={styles.map}
+      style={{
+        width:
+          zoom === "fit"
+            ? `min(100%, ${(width + 2 * pad) * FIT_MAX_PX_PER_FT}px)`
+            : `clamp(${(width + 2 * pad) * zoom}px, 100%, ${(width + 2 * pad) * zoom * 1.6}px)`,
+        margin: "0 auto",
+      }}
       viewBox={`${-pad} ${-pad} ${width + 2 * pad} ${depth + 2 * pad}`}
       role="group"
       aria-label={`Map of ${zone.name}. Use Tab to move between stalls and Enter to select.`}
     >
-      <rect className={styles.zoneOutline} x={0} y={0} width={width} height={depth} />
+      <rect className={styles.zoneOutline} x={0} y={0} width={width} height={depth} rx={2} style={{ fill: SURFACES[zone.code] ?? "#fbfaf6" }} />
+      <Landmarks landmarks={zone.landmarks} />
       {placed.map((stall) => {
         const selected = stall.id === selectedId;
         const label = `Stall ${stall.code}, ${stallLabel(stall)}`;
@@ -78,7 +156,9 @@ export function StallMap({ zone, stalls, selectedId, onSelect }: Props) {
             }}
           >
             <title>{label}</title>
-            <rect width={stall.w} height={stall.d} rx={0.6} />
+            <rect className={styles.stallShadow} x={0.5} y={0.7} width={stall.w} height={stall.d} rx={0.8} />
+            <rect className={styles.stallTop} width={stall.w} height={stall.d} rx={0.8} />
+            <path className={styles.canopy} d={`M0 0L${stall.w} ${stall.d}M${stall.w} 0L0 ${stall.d}`} />
             <text x={stall.w / 2} y={stall.d * (stallMark(stall) ? 0.38 : 0.5)} textAnchor="middle" dominantBaseline="central">
               {stall.code.slice(3)}
             </text>
@@ -98,7 +178,7 @@ export function StallLegend() {
   const swatch = (className: string, mark: string) => (
     <svg width="22" height="16" viewBox="0 0 11 8" aria-hidden="true">
       <g className={`${styles.stall} ${className}`}>
-        <rect width="11" height="8" rx="0.6" />
+        <rect className={styles.stallTop} width="11" height="8" rx="0.8" />
         <text x="5.5" y="4" textAnchor="middle" dominantBaseline="central" style={{ fontSize: 5.5 }}>
           {mark}
         </text>

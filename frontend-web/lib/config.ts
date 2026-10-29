@@ -278,10 +278,30 @@ export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean } 
   return { bookingUi: env.FEATURE_BOOKING_UI?.trim() === "true" };
 }
 
+// ---------------------------------------------------------------------------
+// Optional Cloudflare Turnstile on registration
+// ---------------------------------------------------------------------------
+
+export interface CaptchaConfig {
+  /** Server secret; null = the human check is off. */
+  secretKey: string | null;
+  /** Public site key sent to the form (via the form-token endpoint). */
+  siteKey: string | null;
+}
+
+export function getCaptchaConfig(env: Env = process.env): CaptchaConfig {
+  const secretKey = optional(env, "TURNSTILE_SECRET_KEY") || null;
+  const siteKey = optional(env, "TURNSTILE_SITE_KEY") || null;
+  if (Boolean(secretKey) !== Boolean(siteKey)) {
+    throw new ConfigError(secretKey ? "TURNSTILE_SITE_KEY" : "TURNSTILE_SECRET_KEY", "TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY must be set together");
+  }
+  return { secretKey, siteKey };
+}
+
 /** Validates every section; used at startup to log misconfiguration early. */
 export function validateRuntimeConfig(env: Env = process.env): ConfigError[] {
   const errors: ConfigError[] = [];
-  for (const check of [getAppEnv, getDatabaseConfig, getMailConfig, getImageKitConfig, getAuthConfig, getBookingConfig]) {
+  for (const check of [getAppEnv, getDatabaseConfig, getMailConfig, getImageKitConfig, getAuthConfig, getBookingConfig, getCaptchaConfig]) {
     try {
       check(env);
     } catch (err) {

@@ -1,5 +1,5 @@
 import { afterResponse } from "@/lib/after-response";
-import { findPrincipal, issueLoginCode, sendLoginCodeEmail } from "@/lib/auth/otp";
+import { findPrincipal, issueLoginCode, otpBindingCookie, otpBindingFor, sendLoginCodeEmail } from "@/lib/auth/otp";
 import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
 import { getDb } from "@/lib/db";
 import { assertSameOriginJson, clientAddress, handler, json, readJsonObject, strict, v } from "@/lib/http";
@@ -21,11 +21,13 @@ export const POST = handler(async (request, { requestId }) => {
   await consumeRateLimit(sql, LIMITS.otpRequestPerEmail, `${body.audience}:${body.email}`);
   await consumeRateLimit(sql, LIMITS.otpRequestPerEmailDaily, `${body.audience}:${body.email}`);
 
+  // Every caller gets the binding cookie, so its presence says nothing about the account.
+  const binding = otpBindingFor(request);
   const principal = await findPrincipal(sql, body.audience, body.email);
   if (principal) {
-    const code = await issueLoginCode(sql, body.audience, body.email, principal);
+    const code = await issueLoginCode(sql, body.audience, body.email, principal, binding);
     await afterResponse(() => sendLoginCodeEmail(body.email, code, body.audience));
   }
 
-  return json({ message: ACCEPTED }, 202, requestId);
+  return json({ message: ACCEPTED }, 202, requestId, { "Set-Cookie": otpBindingCookie(binding) });
 });

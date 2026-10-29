@@ -5,17 +5,19 @@
  *   node scripts/inventory/cli.mjs validate <inventory.csv>
  *   node scripts/inventory/cli.mjs seed     <inventory.csv> <out.sql>
  *   node scripts/inventory/cli.mjs preview  <inventory.csv> <out-dir>
+ *   node scripts/inventory/cli.mjs activate <approved.csv> <out.sql> "<approval reference>"
+ *     → a migration that activates only the rows marked APPROVED (with coordinates).
  *
  * Reads and writes local files only; never connects to a database.
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { generateProvisionalSeedSql, parseCsv, renderZonePreview, validateInventory } from "./inventory.mjs";
+import { generateActivationMigrationSql, generateProvisionalSeedSql, parseCsv, renderZonePreview, validateInventory } from "./inventory.mjs";
 
-const [command, csvPath, out] = process.argv.slice(2);
-if (!command || !csvPath || (command !== "validate" && !out)) {
-  console.error("usage: cli.mjs validate <csv> | seed <csv> <out.sql> | preview <csv> <out-dir>");
+const [command, csvPath, out, approvalRef] = process.argv.slice(2);
+if (!command || !csvPath || (command !== "validate" && !out) || (command === "activate" && !approvalRef)) {
+  console.error('usage: cli.mjs validate <csv> | seed <csv> <out.sql> | preview <csv> <out-dir> | activate <csv> <out.sql> "<approval reference>"');
   process.exit(2);
 }
 
@@ -33,6 +35,14 @@ if (report.errors.length > 0) process.exit(1);
 if (command === "seed") {
   writeFileSync(out, generateProvisionalSeedSql(rows, { sourceRef: `${path.basename(csvPath)} sha256:${sha.slice(0, 16)}` }));
   console.log(`wrote ${out}`);
+} else if (command === "activate") {
+  try {
+    writeFileSync(out, generateActivationMigrationSql(rows, { sourceRef: `${path.basename(csvPath)} sha256:${sha.slice(0, 16)}`, approvalRef }));
+  } catch (err) {
+    console.error(`ERROR ${err.message}`);
+    process.exit(1);
+  }
+  console.log(`wrote ${out} (review it, then apply with scripts/migrate.mts)`);
 } else if (command === "preview") {
   mkdirSync(out, { recursive: true });
   for (const zone of [...new Set(rows.map((r) => r.zone_code))]) {

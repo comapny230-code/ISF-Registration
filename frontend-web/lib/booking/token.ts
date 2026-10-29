@@ -27,7 +27,10 @@ export function verifyHoldToken(token: string, holdId: string, teamId: string, e
   if (!match) return false;
   const secret = getBookingConfig().holdTokenKeys.get(match[1]);
   if (!secret) return false;
-  return constantTimeEqual(Buffer.from(match[2], "base64url"), mac(secret, holdId, teamId, expiresAtMs));
+  // Compare the canonical text, not decoded bytes: the last base64url character carries two
+  // padding bits, so decoding would also accept other spellings of the same signature.
+  const expected = mac(secret, holdId, teamId, expiresAtMs).toString("base64url");
+  return constantTimeEqual(Buffer.from(match[2], "latin1"), Buffer.from(expected, "latin1"));
 }
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";

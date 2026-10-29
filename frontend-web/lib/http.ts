@@ -3,6 +3,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { ConfigError, getAuthConfig } from "./config";
+import { isSafeEmailAddress } from "./email-address";
 import { TestDatabaseGuardError } from "./safety/test-database-guard";
 
 export class HttpError extends Error {
@@ -139,7 +140,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const v = {
   email: (value: unknown, field: string): string => {
     const email = typeof value === "string" ? value.trim().toLowerCase() : "";
-    if (!email || email.length > 254 || !EMAIL_PATTERN.test(email)) {
+    if (!email || !EMAIL_PATTERN.test(email) || !isSafeEmailAddress(email)) {
       throw new HttpError(400, "VALIDATION", `${field} must be a valid email address.`, { field });
     }
     return email;
