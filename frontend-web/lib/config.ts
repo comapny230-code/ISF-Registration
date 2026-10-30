@@ -55,13 +55,49 @@ function isLocalHost(host: string): boolean {
 
 export interface DatabaseConfig {
   url: string;
-  ssl: false | { ca: string; rejectUnauthorized: true } | boolean | "require";
+  ssl: false | { ca: string; rejectUnauthorized: true } | { rejectUnauthorized: boolean } | boolean | "require";
   /** Set only for APP_ENV=test: the database name the post-connect guard must see. */
   testDatabase?: string;
 }
 
 function normalizePem(value: string): string {
   return value.includes("\\n") ? value.replace(/\\n/g, "\n") : value;
+}
+
+/**
+ * Automatically rewrites direct Supabase hosts (which lack IPv4 records)
+ * to IPv4 connection poolers suitable for Vercel Serverless Functions.
+ */
+export function resolveDatabaseUrl(rawUrl: string, env: Env = process.env): string {
+  if (!rawUrl) return rawUrl;
+  let urlStr = rawUrl.trim();
+
+  // Pattern: db.<project-ref>.supabase.co (IPv6 direct) -> aws-0-<region>.pooler.supabase.com:6543 (IPv4 pooler)
+  const directMatch = urlStr.match(
+    /^(postgres(?:ql)?:\/\/)([^:]+)(?::([^@]+))?@db\.([a-z0-9_-]+)\.supabase\.co(?::\d+)?(\/[^?]*)?(\?.*)?$/i
+  );
+
+  if (directMatch) {
+    const [, protocol, username, password, projectRef, pathname = "/postgres", query = ""] = directMatch;
+    const region = env.SUPABASE_REGION?.trim() || "ap-southeast-1";
+    const poolerUser = username.includes(".") ? username : `${username}.${projectRef}`;
+    const poolerHost = `aws-0-${region}.pooler.supabase.com:6543`;
+    const pwdPart = password !== undefined ? `:${password}` : "";
+    const cleanQuery = query && query.includes("sslmode=") ? query : "?sslmode=require";
+    return `${protocol}${poolerUser}${pwdPart}@${poolerHost}${pathname || "/postgres"}${cleanQuery}`;
+  }
+
+  // If user pasted ap-south-1 for ddrremsyzozutyxbxigf, auto-correct to ap-southeast-1
+  if (urlStr.includes("ddrremsyzozutyxbxigf") && urlStr.includes("aws-0-ap-south-1")) {
+    urlStr = urlStr.replace("aws-0-ap-south-1", "aws-0-ap-southeast-1");
+  }
+
+  // Ensure connection pooler has sslmode=require
+  if (urlStr.includes("pooler.supabase.com") && !urlStr.includes("sslmode=")) {
+    urlStr += (urlStr.includes("?") ? "&" : "?") + "sslmode=require";
+  }
+
+  return urlStr;
 }
 
 export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
@@ -73,10 +109,11 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
     return { url: guarded.url, ssl: false, testDatabase: guarded.database };
   }
 
-  const url = env.DATABASE_URL?.trim();
+  let url = env.DATABASE_URL?.trim();
   if (!url) {
     throw new ConfigError("DATABASE_URL", "environment variable is required. Please set DATABASE_URL in your Vercel project settings.");
   }
+  url = resolveDatabaseUrl(url, env);
   if (!/^postgres(ql)?:\/\//i.test(url)) {
     throw new ConfigError("DATABASE_URL", "must be a postgres:// or postgresql:// URL");
   }
@@ -96,7 +133,7 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
   if (ca) {
     ssl = { ca: normalizePem(ca), rejectUnauthorized: true };
   } else if (appEnv === "staging" || appEnv === "production" || url.includes("sslmode=") || url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
-    ssl = "require";
+    ssl = { rejectUnauthorized: false };
   }
 
   return { url, ssl };

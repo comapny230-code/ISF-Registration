@@ -58,7 +58,17 @@ export function handler<P extends Record<string, string> = Record<string, string
         );
       }
       const misconfigured = err instanceof ConfigError || err instanceof TestDatabaseGuardError;
-      console.error(misconfigured ? "[CONFIG ERROR]" : "[UNHANDLED ERROR]", {
+      const isDbConnError =
+        (err as any)?.code === "ECONNREFUSED" ||
+        (err as any)?.code === "ETIMEDOUT" ||
+        (err as any)?.code === "ENOTFOUND" ||
+        (err as any)?.code === "ENODATA" ||
+        (err as any)?.code === "EAI_AGAIN" ||
+        (err as any)?.code === "CONNECT_TIMEOUT" ||
+        String((err as any)?.message || "").toLowerCase().includes("timeout") ||
+        String((err as any)?.message || "").toLowerCase().includes("connect");
+
+      console.error(misconfigured ? "[CONFIG ERROR]" : isDbConnError ? "[DB ERROR]" : "[UNHANDLED ERROR]", {
         requestId,
         path: new URL(request.url).pathname,
         name: (err as any)?.name,
@@ -69,6 +79,19 @@ export function handler<P extends Record<string, string> = Record<string, string
       if (misconfigured) {
         return json(
           { error: { code: "SERVICE_MISCONFIGURED", message: (err as any)?.message || "This service is temporarily unavailable.", requestId } },
+          503,
+          requestId
+        );
+      }
+      if (isDbConnError) {
+        return json(
+          {
+            error: {
+              code: "DATABASE_UNAVAILABLE",
+              message: "Unable to reach database. Please check DATABASE_URL in Vercel settings.",
+              requestId,
+            },
+          },
           503,
           requestId
         );
@@ -114,6 +137,8 @@ export function assertSameOriginJson(request: Request): void {
         originUrl.hostname === "127.0.0.1" ||
         originUrl.hostname === "::1" ||
         originUrl.hostname.endsWith(".vercel.app") ||
+        originUrl.hostname.endsWith(".startupjathara.com") ||
+        originUrl.hostname === "startupjathara.com" ||
         allowedOrigins.some((allowedO) => allowedO.toLowerCase() === originUrl.origin.toLowerCase())
       ) {
         allowed = true;
