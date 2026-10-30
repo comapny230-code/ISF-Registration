@@ -10,19 +10,19 @@ export function AdminLoginForm({ next }: Props) {
   const [mode, setMode] = useState<"password" | "reset" | "otp">("password");
 
   // Password mode state
-  const [email, setEmail] = useState("admin@giet.edu");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   // Reset password state
-  const [resetEmail, setResetEmail] = useState("admin@giet.edu");
+  const [resetEmail, setResetEmail] = useState("");
   const [resetStep, setResetStep] = useState<"request" | "confirm">("request");
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   // OTP mode state
-  const [otpEmail, setOtpEmail] = useState("admin@giet.edu");
+  const [otpEmail, setOtpEmail] = useState("");
   const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
   const [otpCode, setOtpCode] = useState("");
 
@@ -358,7 +358,7 @@ export function AdminLoginForm({ next }: Props) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@giet.edu"
+                  placeholder="admin@example.com"
                   style={{
                     width: "100%",
                     padding: "11px 14px",
@@ -496,7 +496,7 @@ export function AdminLoginForm({ next }: Props) {
                       required
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="admin@giet.edu"
+                      placeholder="admin@example.com"
                       style={{
                         width: "100%",
                         padding: "11px 14px",
@@ -656,7 +656,7 @@ export function AdminLoginForm({ next }: Props) {
                       required
                       value={otpEmail}
                       onChange={(e) => setOtpEmail(e.target.value)}
-                      placeholder="admin@giet.edu"
+                      placeholder="admin@example.com"
                       style={{
                         width: "100%",
                         padding: "11px 14px",
