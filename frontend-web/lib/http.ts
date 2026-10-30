@@ -58,7 +58,9 @@ export function handler<P extends Record<string, string> = Record<string, string
         );
       }
       const misconfigured = err instanceof ConfigError || err instanceof TestDatabaseGuardError;
-      console.error(misconfigured ? "[CONFIG ERROR]" : "[UNHANDLED ERROR]", {
+      // The database could not be reached at all (network/DNS/connect timeout): a 503 the client may retry.
+      const unreachable = ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "CONNECT_TIMEOUT"].includes((err as any)?.code);
+      console.error(misconfigured ? "[CONFIG ERROR]" : unreachable ? "[DB UNREACHABLE]" : "[UNHANDLED ERROR]", {
         requestId,
         path: new URL(request.url).pathname,
         name: (err as any)?.name,
@@ -71,6 +73,14 @@ export function handler<P extends Record<string, string> = Record<string, string
           { error: { code: "SERVICE_MISCONFIGURED", message: "This service is temporarily unavailable.", requestId } },
           503,
           requestId
+        );
+      }
+      if (unreachable) {
+        return json(
+          { error: { code: "SERVICE_UNAVAILABLE", message: "This service is temporarily unavailable. Please try again shortly.", requestId } },
+          503,
+          requestId,
+          { "Retry-After": "30" }
         );
       }
       return json({ error: { code: "INTERNAL", message: "An unexpected error occurred.", requestId } }, 500, requestId);

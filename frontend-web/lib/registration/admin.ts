@@ -83,16 +83,7 @@ export function parseRegistrationEdit(raw: Record<string, unknown>): Registratio
 export async function editRegistration(sql: postgres.Sql, id: string, edit: RegistrationEdit): Promise<{ teamName: string }> {
   return sql.begin(async (tx) => {
     const reg = await locate(tx, id);
-    // One leader registration per primary phone (as at registration), across both tracks.
-    const [clash] = await tx`
-      select 1 from public.startup_team_leaders where mobile = ${edit.mobile} and edition_id = ${EDITION_ID} and id <> ${reg.id}
-      union all
-      select 1 from public.student_innovators where mobile = ${edit.mobile} and edition_id = ${EDITION_ID} and id <> ${reg.id}
-      limit 1`;
-    if (clash) {
-      throw new HttpError(409, "PHONE_ALREADY_REGISTERED", "This primary phone number is already registered for another team leader.");
-    }
-
+    // A primary phone may be shared between registrations (rule changed on main, 2026-10-30).
     await tx`
       update ${leaderTable(tx, reg.track)}
          set team_name = ${edit.teamName}, full_name = ${edit.leaderName}, mobile = ${edit.mobile}, alt_mobile = ${edit.altMobile},

@@ -4,7 +4,7 @@
  * accounts, and administrator password sign-in, reset and change.
  */
 import { randomUUID } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as registrationsRoute from "@/app/v1/admin/registrations/route";
 import * as registrationRoute from "@/app/v1/admin/registrations/[id]/route";
 import * as stallsRoute from "@/app/v1/admin/stalls/route";
@@ -128,7 +128,7 @@ describe("ADM-MGMT registrations", () => {
     expect(again.status, JSON.stringify(again.body)).toBe(200);
   });
 
-  it("rejects invalid edits with 400, an unknown id with 404, and another leader's phone with 409", async () => {
+  it("rejects invalid edits with 400 and an unknown id with 404, and accepts a phone another leader uses", async () => {
     const a = await register("senior");
     const b = await register("senior");
     const valid = { teamName: "Team OK", leaderName: "Leader OK", mobile: nextMobile(), domain: "EdTech", city: "Gunupur", state: "Odisha" };
@@ -143,9 +143,9 @@ describe("ADM-MGMT registrations", () => {
       expect(res.status, JSON.stringify(bad)).toBe(400);
     }
     expect((await editRegistration(admin.cookie, randomUUID(), valid)).status).toBe(404);
-    const clash = await editRegistration(admin.cookie, a.id, { ...valid, mobile: b.body.mobile });
-    expect(clash.status).toBe(409);
-    expect(clash.body!.error.code).toBe("PHONE_ALREADY_REGISTERED");
+    // A primary phone may be shared (rule changed on main, 2026-10-30).
+    const shared = await editRegistration(admin.cookie, a.id, { ...valid, mobile: b.body.mobile });
+    expect(shared.status, JSON.stringify(shared.body)).toBe(200);
   });
 
   it("deletes a registration without booking history completely, including member-only accounts", async () => {
@@ -324,6 +324,31 @@ describe("ADM-MGMT administrator accounts and password sign-in", () => {
     const sql = await getDb();
     await sql`update app_auth.admin_users set status = 'disabled', disabled_at = now() where id = ${id}`;
     expect((await login(email, PASSWORD)).status).toBe(401);
+  });
+
+  it("ignores ADMIN_EMAIL / ADMIN_PASSWORD: no sign-in, no account created, no disabled admin re-enabled", async () => {
+    const email = `env-${randomUUID().slice(0, 8)}@example.test`;
+    vi.stubEnv("ADMIN_EMAIL", email);
+    vi.stubEnv("ADMIN_PASSWORD", "env-configured-password-1");
+    try {
+      expect((await login(email, "env-configured-password-1")).status).toBe(401);
+      const sql = await getDb();
+      const [row] = await sql`select count(*)::int as n from app_auth.admin_users where email = ${email}`;
+      expect(row.n).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("limits password attempts per client address", async () => {
+    const email = `limit-${randomUUID().slice(0, 8)}@example.test`;
+    await passwordAdmin(email);
+    const ip = `203.0.113.${Math.floor(Math.random() * 200) + 20}`;
+    const attempt = () => call(adminLoginRoute.POST, apiRequest("/v1/auth/admin/login", { email, password: "wrong-password-123" }, { ip }));
+    const statuses: number[] = [];
+    for (let i = 0; i < 52; i++) statuses.push((await attempt()).status);
+    expect(statuses.slice(0, 50).every((s) => s === 401)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
   });
 
   it("resets a forgotten password with an emailed code, with the same reply for unknown addresses", async () => {

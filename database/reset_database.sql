@@ -164,7 +164,7 @@ create table if not exists public.startup_team_leaders (
 create unique index if not exists idx_startup_team_leaders_email_uq on public.startup_team_leaders (lower(email), coalesce(edition_id, 2026));
 create unique index if not exists idx_startup_team_leaders_aadhar_uq on public.startup_team_leaders (aadhar_number, coalesce(edition_id, 2026)) where aadhar_number is not null;
 create unique index if not exists idx_startup_team_leaders_pan_uq on public.startup_team_leaders (upper(pan_number), coalesce(edition_id, 2026)) where pan_number is not null;
-create unique index if not exists idx_startup_team_leaders_phone_uq on public.startup_team_leaders (mobile, coalesce(edition_id, 2026));
+create index if not exists idx_startup_team_leaders_phone on public.startup_team_leaders (mobile);
 
 create table if not exists public.startup_team_members (
   id              uuid primary key default gen_random_uuid(),
@@ -209,7 +209,7 @@ create table if not exists public.student_innovators (
 create unique index if not exists idx_student_innovators_email_uq on public.student_innovators (lower(email), coalesce(edition_id, 2026));
 create unique index if not exists idx_student_innovators_aadhar_uq on public.student_innovators (aadhar_number, coalesce(edition_id, 2026)) where aadhar_number is not null;
 create unique index if not exists idx_student_innovators_pan_uq on public.student_innovators (upper(pan_number), coalesce(edition_id, 2026)) where pan_number is not null;
-create unique index if not exists idx_student_innovators_phone_uq on public.student_innovators (mobile, coalesce(edition_id, 2026));
+create index if not exists idx_student_innovators_phone on public.student_innovators (mobile);
 
 create table if not exists public.student_team_members (
   id                    uuid primary key default gen_random_uuid(),

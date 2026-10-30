@@ -1,6 +1,6 @@
 /**
  * REG-RULES: rules added to registration on 2026-10-29: Aadhaar/PAN consent is required and
- * recorded; one registration per PAN and per primary phone (in any format); PAN format checked
+ * recorded; one registration per PAN; a primary phone may be shared (main, 2026-10-30); PAN format checked
  * on the server as well as in the form.
  */
 import { describe, expect, it } from "vitest";
@@ -96,15 +96,17 @@ describe("REG-RULES PAN", () => {
 });
 
 describe("REG-RULES primary phone", () => {
-  it("allows one leader registration per primary phone, in any format, across both tracks", async () => {
+  // Rule changed on main (2026-10-30): a primary phone may be shared, e.g. by teams of one
+  // institution; it is stored in one format so organisers can still spot it.
+  it("accepts a primary phone already used by another registration, stored in the same format", async () => {
     const mobile = nextMobile();
     expect((await register(payload({ mobile }))).status).toBe(200);
-    for (const again of [`+91 ${mobile.slice(0, 5)} ${mobile.slice(5)}`, `0${mobile}`]) {
-      const body = payload({ mobile: again, category: "student_innovator" });
-      const res = await register(body);
-      expect(res.status, again).toBe(409);
-      expect(res.json.code).toBe("PHONE_ALREADY_REGISTERED");
-      expect(await accounts(body.email as string)).toBe(0);
-    }
+    const body = payload({ mobile: `+91 ${mobile.slice(0, 5)} ${mobile.slice(5)}`, category: "student_innovator" });
+    expect((await register(body)).status).toBe(200);
+    const sql = await getDb();
+    const rows = await sql`
+      select mobile from startup_team_leaders where mobile = ${`+91${mobile}`}
+      union all select mobile from student_innovators where mobile = ${`+91${mobile}`}`;
+    expect(rows.length).toBe(2);
   });
 });

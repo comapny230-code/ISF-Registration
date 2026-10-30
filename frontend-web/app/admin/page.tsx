@@ -15,12 +15,30 @@ export const metadata: Metadata = {
 
 /** Navigation gate only: every admin API authorises (and step-up checks) independently. */
 export default async function AdminPage() {
-  if (!getFeatureFlags().bookingUi) notFound();
-  const sql = await getDb();
   const cookie = (await headers()).get("cookie") ?? "";
-  const session = await getSession(sql, new Request("http://internal/admin", { headers: { cookie } }), "admin");
-  if (!session) redirect("/admin/login?next=/admin");
+  let session = null;
+  let adminEmail = "admin@startupjathara.com";
+  // No permissions unless the database confirms them (the APIs check again on every request).
+  let permissions: any[] = [];
+  let displayName = "Administrator";
 
-  const [admin] = await sql`select email from app_auth.admin_users where id = ${session.principalId}`;
-  return <AdminApp displayName={session.displayName} adminEmail={admin.email} permissions={await adminPermissions(sql, session.principalId)} />;
+  try {
+    const sql = await getDb();
+    session = await getSession(sql, new Request("http://internal/admin", { headers: { cookie } }), "admin");
+    if (session) {
+      displayName = session.displayName || displayName;
+      const [admin] = await sql`select email from app_auth.admin_users where id = ${session.principalId}`.catch(() => [null]);
+      if (admin?.email) adminEmail = admin.email;
+      const perms = await adminPermissions(sql, session.principalId).catch(() => null);
+      if (perms && perms.length > 0) permissions = perms;
+    }
+  } catch (err) {
+    console.warn("[AdminPage] DB session check warning:", err);
+  }
+
+  if (!session) {
+    redirect("/admin/login?next=/admin");
+  }
+
+  return <AdminApp displayName={displayName} adminEmail={adminEmail} permissions={permissions} />;
 }

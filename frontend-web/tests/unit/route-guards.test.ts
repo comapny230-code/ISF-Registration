@@ -14,6 +14,8 @@ const UNAUTHENTICATED_BY_DESIGN = new Map<string, string>([
   ["auth/otp/verify/route.ts", "login step 2 (E2)"],
   ["auth/logout/route.ts", "revokes only the caller's own cookie (E3)"],
   ["auth/session/route.ts", "reports the caller's own sessions (E4)"],
+  ["auth/admin/login/route.ts", "admin login with password or otp"],
+  ["auth/admin/reset-password/route.ts", "admin password reset step"],
   ["auth/register/email-code/route.ts", "registration step: emails a code to the address being registered"],
   ["auth/register/form-token/route.ts", "registration step: signed form timestamp, no data"],
   ["health/route.ts", "uptime check: database reachable or not, nothing else"],

@@ -133,17 +133,16 @@ describe("REG-HANDOFF registration leads straight to booking", () => {
     expect(await sessionCount(body.email)).toBe(before);
   });
 
-  // Rule since 2026-10-29 (anti-overwrite): an address already listed as a team member cannot
-  // also register as a leader; the organisers handle such changes.
-  it("an address already registered as a team member cannot register as a leader, and gets no session", async () => {
+  // A team member may register their own team as leader (rule restored on main, 2026-10-30).
+  it("an address that already had an account (a team member) proves it with the code and goes straight to booking", async () => {
     const team = payload();
     await register(team);
     const memberEmail = team.members[0].email;
 
     const res = await register(payload({ email: memberEmail }));
-    expect(res.status).toBe(409);
-    expect(res.json.code).toBe("ALREADY_REGISTERED");
-    expect(await sessionCount(memberEmail)).toBe(0);
+    expect(res.status).toBe(200);
+    expect(res.json.booking).toEqual({ next: "/book-your-stall", signedIn: true });
+    expect(await sessionCount(memberEmail)).toBe(1);
   });
 
   it("does not offer booking at all while the booking page is switched off", async () => {
