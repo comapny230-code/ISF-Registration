@@ -23,23 +23,30 @@
 | 0007 | Sign-in codes bound to the requesting browser |
 | 0008 | Registration email codes; **organiser approval no longer required** (owner decision) |
 | 0009 | Removes EXECUTE on every `public` function from `PUBLIC`/`anon`/`authenticated`, so nothing is callable at `/rest/v1/rpc/…` (the live project's `rls_auto_enable()` is). Triggers and event triggers keep firing |
+| 0010 | Aadhaar/PAN consent columns; admin `password_hash` with a format check |
+| 0011 | Catch-up for a database built from `schema.sql`/`reset_database.sql` (the live project): `teams_guard`, seven 0001 indexes, the 0009 and 0006 lockdowns (including default privileges), the 0010 check. Idempotent: a no-op on a database built from the migrations |
 
 No stall becomes bookable from these. Venue stalls are activated later by a separate, organiser-approved migration (`docs/inventory/README.md`), and booking opens only when an operator sets `booking_enabled`, `opens_at`, `closes_at` and `eligible_tracks`.
 
-## State of the connected project `ddrremsyzozutyxbxigf` (read-only check, 2026-10-29)
+## State of the connected project `ddrremsyzozutyxbxigf` (read-only check, 2026-10-30)
 
-Checked through the Supabase MCP server in **read-only** mode (`supabase_read_only_user`), PostgreSQL 17.11. Nothing was changed. **Treat this project as production**: it holds registration rows.
+Supersedes the 2026-10-29 check: on 2026-10-29 the database was **dropped and rebuilt** from the pushed `reset_database.sql` (all registrations lost). Checked read-only through the Supabase MCP server; nothing was changed.
 
-| Check | Result | What it means |
+| Migration | State | Evidence |
 |---|---|---|
-| Migration runner table `public.schema_migrations` | **absent**; Supabase's own migration list is empty | No migration has been applied with the runner. 0002–0009 are all pending |
-| Schemas `app_auth`, `booking` | **absent** | Sign-in, sessions, admin accounts and booking do not exist yet. Book Your Stall cannot work against this project until 0002–0009 are applied |
-| `public` schema vs. migration 0001 | **identical**: 184 columns/defaults, constraints and indexes match a scratch database built from 0001 (same hash) | `baseline --version 0001` is safe; this also settles B-04 for the `public` tables |
-| Row-level security | **on** for all 10 `public` tables, no policies (enabled by the project's `ensure_rls` event trigger) | The Data API returns no rows today |
-| Table grants | **`anon` and `authenticated` hold SELECT, INSERT, UPDATE, DELETE on all 10 tables** | Only RLS protects Aadhaar/PAN data. A single permissive policy, or RLS being switched off, would expose it. **0006 removes these grants** |
-| Functions | `public.rls_auto_enable()` is SECURITY DEFINER and executable by `anon`/`authenticated` (Supabase advisor lints 0028/0029) | An event-trigger function cannot be called directly with useful effect, but **0009 closes it** |
-| Role `isf_app` | **absent** | LG-03: [INFRA] creates it after the migrations |
-| Supabase security advisor | 10 × "RLS enabled, no policy" (INFO, intended), 2 × the function warnings above | After 0006 + 0009, only the INFO items remain |
+| 0001 | Partly | All tables exist; 7 indexes missing (added by 0011); extra unique indexes from the collaborator's code (kept) |
+| 0002 | Present | Schemas exist; no `anon` usage |
+| 0003 | Partly | All `app_auth` tables identical; **`booking.teams_guard` function and trigger missing** (0011) |
+| 0004 | Present | Booking tables identical; guard functions identical apart from CRLF line endings |
+| 0005 | Present (same effect) | Settings row written by `schema-init`; no registrations to back-fill |
+| 0006 | Partly | RLS on and no API grants on all 10 tables, but **Supabase's default privileges still give `anon`/`authenticated` full rights on every new `public` table** (0011) |
+| 0007, 0008 | Present | Columns, table, indexes and the approval default as in the migrations |
+| 0009 | **Absent** | `public.rls_auto_enable()` (SECURITY DEFINER) executable by `anon`/`authenticated` (0011) |
+| 0010 | Partly | Columns present; `password_hash` format check missing (0011; the one stored hash conforms) |
+
+There is **no `public.schema_migrations` table**. A plain `apply` would fail at 0003 (`relation "admin_users" already exists`) after recording 0001 and 0002, so it must not be run there.
+
+**Rehearsed locally on 2026-10-30** on a replica built from the pushed reset script (all 22 table fingerprints identical to the live project, same RLS and default-privilege state): `baseline --version 0010`, `apply` (0011 only), `verify` passed (195 checks), a second `apply` did nothing, and the result matches a database built from the migrations apart from the kept unique indexes. A malformed stored password hash made 0011 fail and roll back completely.
 
 ## Environment (set in your shell for this session only; never commit)
 
@@ -56,8 +63,11 @@ export PRODUCTION_DB_DENYLIST='<production project ref>'   # staging only
 ```bash
 cd frontend-web
 node scripts/migrate.mts status   --target staging
-# First run on a database that already has the registration tables (created before this runner existed):
-node scripts/migrate.mts baseline --target staging --version 0001
+# First run on a database whose schema was created without this runner:
+#   live project ddrremsyzozutyxbxigf (built from reset_database.sql): --version 0010, then apply runs 0011 only
+#   a database that has only the registration tables: --version 0001
+node scripts/migrate.mts baseline --target staging --version 0010 --dry-run
+node scripts/migrate.mts baseline --target staging --version 0010
 node scripts/migrate.mts apply    --target staging --dry-run
 node scripts/migrate.mts apply    --target staging
 node scripts/migrate.mts verify   --target staging

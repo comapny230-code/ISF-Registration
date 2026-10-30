@@ -62,17 +62,33 @@ describe("migration runner", () => {
     expect(res.out).toMatch(/would apply 0008_registration_email_verification\.sql/);
     expect(res.out).toMatch(/would apply 0009_public_functions_execute\.sql/);
     expect(res.out).toMatch(/would apply 0010_admin_passwords_and_id_consent\.sql/);
+    expect(res.out).toMatch(/would apply 0011_production_catch_up\.sql/);
     expect(await withDb(async (sql) => (await sql`select to_regclass('booking.reservations') as t`)[0].t)).toBeNull();
+  });
+
+  it("creates its history table locked down, even on a read-only status run", async () => {
+    // On Supabase a new public table would otherwise inherit anon/authenticated grants.
+    await withDb((sql) => sql.unsafe("alter default privileges in schema public grant all on tables to public"));
+    try {
+      await withDb((sql) => sql.unsafe("drop table if exists public.schema_migrations"));
+      expect(migrate(["status", "--target", "test"]).code).toBe(0);
+      const [row] = await withDb((sql) => sql`
+        select c.relrowsecurity as rls, has_table_privilege('public', c.oid, 'select') as public_select
+          from pg_class c where c.oid = 'public.schema_migrations'::regclass`);
+      expect(row).toEqual({ rls: true, public_select: false });
+    } finally {
+      await withDb((sql) => sql.unsafe("alter default privileges in schema public revoke all on tables from public"));
+    }
   });
 
   it("applies every migration once, records checksums, and is a no-op the second time", async () => {
     const first = migrate(["apply", "--target", "test"]);
     expect(first.code, first.out).toBe(0);
-    expect(first.out.match(/^applied /gm)).toHaveLength(10);
+    expect(first.out.match(/^applied /gm)).toHaveLength(11);
     const second = migrate(["apply", "--target", "test"]);
     expect(second.out).toMatch(/nothing to apply/);
     const rows = await withDb((sql) => sql`select version, applied_by, length(sha256) as len from public.schema_migrations order by version`);
-    expect(rows.map((r) => r.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010"]);
+    expect(rows.map((r) => r.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011"]);
     expect(rows.every((r) => r.applied_by === "vitest" && r.len === 64)).toBe(true);
     expect(migrate(["status", "--target", "test"]).out).not.toMatch(/pending|CHANGED/);
   });

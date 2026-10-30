@@ -125,14 +125,24 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
 }
 
 async function run(sql: postgres.Sql, command: string, flags: Record<string, string | true>, env: NodeJS.ProcessEnv): Promise<number> {
-  await sql`
-    create table if not exists public.schema_migrations (
-      version    text primary key,
-      name       text not null,
-      sha256     text not null,
-      applied_at timestamptz not null default now(),
-      applied_by text not null
-    )`;
+  // Created locked down in one transaction: on Supabase a new public table otherwise inherits
+  // full anon/authenticated grants from the default privileges and is exposed by the Data API.
+  await sql.begin(async (tx) => {
+    await tx`
+      create table if not exists public.schema_migrations (
+        version    text primary key,
+        name       text not null,
+        sha256     text not null,
+        applied_at timestamptz not null default now(),
+        applied_by text not null
+      )`;
+    await tx`alter table public.schema_migrations enable row level security`;
+    await tx`revoke all on table public.schema_migrations from public`;
+    for (const role of ["anon", "authenticated"]) {
+      const [exists] = await tx`select 1 from pg_roles where rolname = ${role}`;
+      if (exists) await tx.unsafe(`revoke all on table public.schema_migrations from ${role}`);
+    }
+  });
   const operator = env.MIGRATION_OPERATOR?.trim() || `${os.userInfo().username}@${os.hostname()}`;
   const files = migrationFiles();
   const applied = new Map((await sql`select version, name, sha256 from public.schema_migrations`).map((r) => [r.version as string, r]));
