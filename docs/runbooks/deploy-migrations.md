@@ -25,6 +25,7 @@
 | 0009 | Removes EXECUTE on every `public` function from `PUBLIC`/`anon`/`authenticated`, so nothing is callable at `/rest/v1/rpc/…` (the live project's `rls_auto_enable()` is). Triggers and event triggers keep firing |
 | 0010 | Aadhaar/PAN consent columns; admin `password_hash` with a format check |
 | 0011 | Catch-up for a database built from `schema.sql`/`reset_database.sql` (the live project): `teams_guard`, seven 0001 indexes, the 0009 and 0006 lockdowns (including default privileges), the 0010 check. Idempotent: a no-op on a database built from the migrations |
+| 0012 | Deletes the reset script's 15 starter/test stalls (`source_ref = 'starter'`, inserted as `approved`) and returns its `master` zones to `provisional` unless they hold a really approved stall. Refuses if any starter stall has a reservation or audit entry. No-op elsewhere |
 
 No stall becomes bookable from these. Venue stalls are activated later by a separate, organiser-approved migration (`docs/inventory/README.md`), and booking opens only when an operator sets `booking_enabled`, `opens_at`, `closes_at` and `eligible_tracks`.
 
@@ -46,7 +47,7 @@ Supersedes the 2026-10-29 check: on 2026-10-29 the database was **dropped and re
 
 There is **no `public.schema_migrations` table**. A plain `apply` would fail at 0003 (`relation "admin_users" already exists`) after recording 0001 and 0002, so it must not be run there.
 
-**Rehearsed locally on 2026-10-30** on a replica built from the pushed reset script (all 22 table fingerprints identical to the live project, same RLS and default-privilege state): `baseline --version 0010`, `apply` (0011 only), `verify` passed (195 checks), a second `apply` did nothing, and the result matches a database built from the migrations apart from the kept unique indexes. A malformed stored password hash made 0011 fail and roll back completely.
+**Rehearsed locally on 2026-10-30** on a replica built from the pushed reset script (all 22 table fingerprints identical to the live project, same RLS and default-privilege state): `baseline --version 0010`, `apply` (0011 and 0012 only), `verify` passed (195 checks), a second `apply` did nothing, and the result matches a database built from the migrations apart from the kept unique indexes. A malformed stored password hash made 0011 fail and roll back completely. 0012 was rehearsed on the live booking data (stall and zone fingerprints identical): without it, a real activation "succeeds" but keeps 14 starter positions and the extra `AG-A05`; with it, activation loads the approved positions.
 
 ## Environment (set in your shell for this session only; never commit)
 
@@ -64,7 +65,7 @@ export PRODUCTION_DB_DENYLIST='<production project ref>'   # staging only
 cd frontend-web
 node scripts/migrate.mts status   --target staging
 # First run on a database whose schema was created without this runner:
-#   live project ddrremsyzozutyxbxigf (built from reset_database.sql): --version 0010, then apply runs 0011 only
+#   live project ddrremsyzozutyxbxigf (built from reset_database.sql): --version 0010, then apply runs 0011 and 0012
 #   a database that has only the registration tables: --version 0001
 node scripts/migrate.mts baseline --target staging --version 0010 --dry-run
 node scripts/migrate.mts baseline --target staging --version 0010

@@ -102,6 +102,8 @@ Eight commits were pushed straight to `main` and `feature/book-your-stall` (book
 | B-08 | Any admin could create a full admin; 6-character admin passwords; reset reply revealed whether an admin exists | Medium | Creating admins needs every permission; 12-character minimum; uniform reply |
 | B-09 | Seed SQL marks all zones and stalls `approved`; live DB has 15 approved, bookable stalls | High | Seeds now `provisional`. **[ORG]** live stalls stay bookable until approved or set back to provisional |
 | B-10 | New columns (consent, admin password) existed only through runtime DDL | Medium | Migration `0010_admin_passwords_and_id_consent.sql`; `isf_app` grants updated |
+| B-11 | Live admin **`admin@giet.edu` has the password published in commit `3372dc1`**, is active and holds all 4 permissions; the live site has admin password sign-in | Critical | **[OWNER]** clear its `password_hash` and revoke its sessions now (SQL given 2026-10-30). Match verified by fingerprint, without revealing the hash |
+| B-12 | The 15 live stalls are the reset script's **starter/test data** ("Starter bookable stalls for manual testing"), `approved` and bookable; they would also make a real activation keep invented positions | High | Migration `0012_remove_starter_test_stalls.sql`, rehearsed on the live data; **[ORG]** switch booking off until the real inventory is approved |
 
 Kept from the collaborator: DPDP consent checkbox, no-overwrite rules (email, Aadhaar, PAN, primary phone; a team member's address can no longer register as a leader), admin tabs and CRUD, password sign-in for admins, public booking page with sign-in dialog, booking page on by default.
 
