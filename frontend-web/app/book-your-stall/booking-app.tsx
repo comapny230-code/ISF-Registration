@@ -300,8 +300,11 @@ export function BookingApp({ displayName }: { displayName: string }) {
 
         {!snapshot ? (
           <p className="muted">Loading the venue…</p>
-        ) : snapshot.zones.length === 0 ? (
-          <div className="notice notice-warn">The stall layout has not been published yet. Please check back later.</div>
+        ) : snapshot.zones.length === 0 || snapshot.stalls.length === 0 ? (
+          // Zones can exist before any stall is loaded (inventory awaiting organiser approval).
+          <div className="notice notice-warn" data-testid="layout-pending">
+            The stall layout has not been published yet. Please check back later.
+          </div>
         ) : (
           <>
             <div className={styles.toolbar}>

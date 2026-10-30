@@ -540,9 +540,10 @@ function EditRegistrationModal({
   );
 }
 
-function AddStallModal({ onDone }: { onDone: (msg: string | null) => void }) {
-  const [zone, setZone] = useState<"PG" | "BB">("PG");
-  const [code, setCode] = useState("PG-A31");
+/** Zones come from the database (snapshot), so every zone in the inventory can receive stalls. */
+function AddStallModal({ zones, onDone }: { zones: Array<{ code: string; name: string }>; onDone: (msg: string | null) => void }) {
+  const [zone, setZone] = useState(zones[0]?.code ?? "");
+  const [code, setCode] = useState(zones[0] ? `${zones[0].code}-A01` : "");
   const [x, setX] = useState(20);
   const [y, setY] = useState(20);
   const [width, setWidth] = useState(10);
@@ -586,13 +587,15 @@ function AddStallModal({ onDone }: { onDone: (msg: string | null) => void }) {
             <select
               value={zone}
               onChange={(e) => {
-                const z = e.target.value as "PG" | "BB";
-                setZone(z);
-                setCode(z === "PG" ? "PG-A31" : "BB-B26");
+                setZone(e.target.value);
+                setCode(`${e.target.value}-A01`);
               }}
             >
-              <option value="PG">Playground GIET University (PG)</option>
-              <option value="BB">Rang Manch / Basketball Ground (BB)</option>
+              {zones.map((z) => (
+                <option key={z.code} value={z.code}>
+                  {z.name} ({z.code})
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -789,10 +792,15 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
 
   // Stalls
   const [stalls, setStalls] = useState<SnapshotStall[] | null>(null);
+  const [zones, setZones] = useState<Array<{ code: string; name: string }>>([]);
   const [stallZoneFilter, setStallZoneFilter] = useState<string>("all");
   const [stallStatusFilter, setStallStatusFilter] = useState<string>("all");
   const [stallSearch, setStallSearch] = useState("");
-  const reloadStalls = useCallback(async () => setStalls((await bookingApi.snapshot()).stalls), []);
+  const reloadStalls = useCallback(async () => {
+    const snapshot = await bookingApi.snapshot();
+    setStalls(snapshot.stalls);
+    setZones(snapshot.zones.map((z) => ({ code: z.code, name: z.name })));
+  }, []);
 
   // Bookings & Audit
   const bookings = useList<AdminBooking>(loadBookings);
@@ -1554,6 +1562,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
 
       {showAddStall && (
         <AddStallModal
+          zones={zones}
           onDone={(msg) => {
             setShowAddStall(false);
             if (msg) finish(msg);

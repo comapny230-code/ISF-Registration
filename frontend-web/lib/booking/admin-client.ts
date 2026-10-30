@@ -109,12 +109,13 @@ export const adminApi = {
   stats: () => request<AdminStats>("/v1/admin/stats"),
   registrations: () => request<{ total: number; registrations: AdminRegistrationItem[] }>("/v1/admin/registrations"),
   updateRegistration: (id: string, data: Record<string, any>) => post(`/v1/admin/registrations/${encodeURIComponent(id)}`, data, "PATCH"),
-  deleteRegistration: (id: string) => request<{ ok: true; message: string }>(`/v1/admin/registrations/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  createStall: (data: { zone: "PG" | "BB"; code: string; width?: number; depth?: number; x: number; y: number; rotation?: number }) =>
+  // Writes must be same-origin JSON (assertSameOriginJson), so DELETE sends an empty JSON body.
+  deleteRegistration: (id: string) => post<{ ok: true; message: string }>(`/v1/admin/registrations/${encodeURIComponent(id)}`, {}, "DELETE"),
+  createStall: (data: { zone: string; code: string; width?: number; depth?: number; x: number; y: number; rotation?: number }) =>
     post<{ ok: true; stall: any }>("/v1/admin/stalls", data),
   updateStall: (stallId: string, data: { code?: string; width?: number; depth?: number; x?: number; y?: number; rotation?: number }) =>
     post<{ ok: true; stall: any }>(`/v1/admin/stalls/${encodeURIComponent(stallId)}`, data, "PATCH"),
-  deleteStall: (stallId: string) => request<{ ok: true; message: string }>(`/v1/admin/stalls/${encodeURIComponent(stallId)}`, { method: "DELETE" }),
+  deleteStall: (stallId: string) => post<{ ok: true; message: string }>(`/v1/admin/stalls/${encodeURIComponent(stallId)}`, {}, "DELETE"),
   bookings: (cursor?: string | null) => request<Page<AdminBooking>>(`/v1/admin/bookings${qs({ cursor, limit: "50" })}`),
   teams: (approval?: string | null, cursor?: string | null) =>
     request<Page<AdminTeam> & { unresolved: { ambiguousLeaders: number; nullEditionLeaders: number; leadersWithoutTeam: number } }>(

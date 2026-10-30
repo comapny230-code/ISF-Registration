@@ -34,7 +34,8 @@ export const GET = handler(async (request, { requestId }) => {
            r.booking_ref
       from public.startup_team_leaders l
       left join booking.teams t on t.startup_team_leader_id = l.id and t.edition_id = ${EDITION_ID}
-      left join booking.reservations r on r.team_id = t.id and r.status in ('held', 'confirmed')
+      left join booking.reservations r on r.team_id = t.id
+                                       and (r.status = 'confirmed' or (r.status = 'held' and r.expires_at > clock_timestamp()))
       left join booking.stalls st on st.id = r.stall_id
      where l.edition_id = ${EDITION_ID}
      order by l.created_at desc`;
@@ -66,34 +67,28 @@ export const GET = handler(async (request, { requestId }) => {
            r.booking_ref
       from public.student_innovators s
       left join booking.teams t on t.student_innovator_id = s.id and t.edition_id = ${EDITION_ID}
-      left join booking.reservations r on r.team_id = t.id and r.status in ('held', 'confirmed')
+      left join booking.reservations r on r.team_id = t.id
+                                       and (r.status = 'confirmed' or (r.status = 'held' and r.expires_at > clock_timestamp()))
       left join booking.stalls st on st.id = r.stall_id
      where s.edition_id = ${EDITION_ID}
      order by s.created_at desc`;
 
-  // 3. Fetch all team members
+  // 3. Team members of both tracks, keyed by the leader registration's id.
   const memberRows = await sql`
-    select m.id,
-           m.leader_user_id,
-           m.name,
-           m.photo_url,
-           m.phone,
-           m.email,
-           m.created_at
+    select l.id as registration_id, m.name, m.photo_url, m.phone, m.email, m.created_at
       from public.startup_team_members m
       join public.startup_team_leaders l on l.user_id = m.leader_user_id and l.edition_id = ${EDITION_ID}
-     order by m.created_at asc`;
+    union all
+    select s.id as registration_id, m.name, m.photo_url, m.phone, m.email, m.created_at
+      from public.student_team_members m
+      join public.student_innovators s on s.id = m.student_innovator_id and s.edition_id = ${EDITION_ID}
+     order by created_at asc`;
 
-  const membersByLeader = new Map<string, Array<{ name: string; email: string; phone: string; photoUrl: string | null }>>();
+  const membersByRegistration = new Map<string, Array<{ name: string; email: string; phone: string; photoUrl: string | null }>>();
   for (const m of memberRows) {
-    const list = membersByLeader.get(m.leader_user_id) ?? [];
-    list.push({
-      name: m.name,
-      email: m.email,
-      phone: m.phone,
-      photoUrl: m.photo_url ?? null,
-    });
-    membersByLeader.set(m.leader_user_id, list);
+    const list = membersByRegistration.get(m.registration_id) ?? [];
+    list.push({ name: m.name, email: m.email, phone: m.phone, photoUrl: m.photo_url ?? null });
+    membersByRegistration.set(m.registration_id, list);
   }
 
   const allRegistrations = [
@@ -118,7 +113,7 @@ export const GET = handler(async (request, { requestId }) => {
       consentGiven: Boolean(r.id_consent_given),
       createdAt: r.created_at,
       approvalStatus: r.approval_status,
-      members: membersByLeader.get(r.user_id) ?? [],
+      members: membersByRegistration.get(r.id) ?? [],
       reservation: r.reservation_status
         ? {
             kind: r.reservation_status === "confirmed" ? ("booking" as const) : ("hold" as const),
@@ -148,7 +143,7 @@ export const GET = handler(async (request, { requestId }) => {
       consentGiven: Boolean(r.id_consent_given),
       createdAt: r.created_at,
       approvalStatus: r.approval_status,
-      members: [],
+      members: membersByRegistration.get(r.id) ?? [],
       reservation: r.reservation_status
         ? {
             kind: r.reservation_status === "confirmed" ? ("booking" as const) : ("hold" as const),

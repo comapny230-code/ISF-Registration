@@ -85,24 +85,30 @@ export interface Leader {
   userId: string;
   teamId: string;
   email: string;
+  mobile: string;
   cookie: string;
 }
+
+/** A primary phone may lead only one registration; these use the 8xxxxxxxxx range (registration tests use 9). */
+let mobileCounter = 0;
+const leaderMobile = () => `8${process.pid % 10}${String(Date.now() % 1e4).padStart(4, "0")}${String(++mobileCounter).padStart(4, "0")}`;
 
 /** A registered leader with a team row and a live session (direct SQL, for speed). */
 export async function createLeader(track: "senior" | "junior" = "senior"): Promise<Leader> {
   const sql = await getDb();
   const n = ++leaderCounter;
   const email = `booking-leader${n}@example.test`;
+  const mobile = leaderMobile();
   const [user] = await sql`insert into user_accounts (email, full_name) values (${email}, ${`Leader ${n}`}) returning id`;
   const table = track === "senior" ? sql`startup_team_leaders` : sql`student_innovators`;
   const [leaderRow] = await sql`
     insert into ${table} (user_id, team_name, full_name, email, mobile, alt_mobile, domain, city, state, linkedin_url, edition_id)
-    values (${user.id}, ${`Team ${n}`}, ${`Leader ${n}`}, ${email}, '1', '2', 'd', 'c', 's', 'l', 2026) returning id`;
+    values (${user.id}, ${`Team ${n}`}, ${`Leader ${n}`}, ${email}, ${mobile}, '2', 'd', 'c', 's', 'l', 2026) returning id`;
   const [team] = await sql`
     insert into booking.teams (edition_id, leader_user_id, track, startup_team_leader_id, student_innovator_id, team_name_snapshot)
     values (2026, ${user.id}, ${track}, ${track === "senior" ? leaderRow.id : null}, ${track === "junior" ? leaderRow.id : null}, ${`Team ${n}`})
     returning id`;
-  return { userId: user.id, teamId: team.id, email, cookie: await newSessionCookie(user.id) };
+  return { userId: user.id, teamId: team.id, email, mobile, cookie: await newSessionCookie(user.id) };
 }
 
 export async function newSessionCookie(userId: string): Promise<string> {

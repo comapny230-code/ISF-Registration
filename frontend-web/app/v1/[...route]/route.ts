@@ -13,6 +13,7 @@ import { isValidAadhaar } from "@/lib/registration/aadhaar";
 import { verifyRegistrationCode } from "@/lib/registration/email-verification";
 import { checkCaptcha } from "@/lib/registration/captcha";
 import { assertRegistrationOpen, checkFormToken, checkHoneypot } from "@/lib/registration/form-guard";
+import { normalizeMobileNumber } from "@/lib/registration/phone";
 import {
   AadhaarAlreadyRegisteredError,
   AlreadyRegisteredError,
@@ -80,25 +81,6 @@ function normalizeLinkedInUrl(input: string): string {
   return `https://www.linkedin.com/in/${cleanUsername}`;
 }
 
-function normalizeMobileNumber(input: string): string | null {
-  if (!input) return null;
-  let s = String(input).trim().replace(/[\s\-().]/g, "");
-  if (!s) return null;
-
-  if (s.startsWith("00")) {
-    s = "+" + s.slice(2);
-  }
-  if (/^[6-9]\d{9}$/.test(s)) return `+91${s}`;
-  if (/^0[6-9]\d{9}$/.test(s)) return `+91${s.slice(1)}`;
-  if (/^91[6-9]\d{9}$/.test(s)) return `+${s}`;
-  if (/^\d{10}$/.test(s)) return `+91${s}`;
-  if (/^0\d{10}$/.test(s)) return `+91${s.slice(1)}`;
-  if (/^91\d{10}$/.test(s)) return `+${s}`;
-  if (/^\+[1-9]\d{7,14}$/.test(s)) return s;
-  if (/^[1-9]\d{7,14}$/.test(s)) return `+${s}`;
-
-  return null;
-}
 
 /** Set once the database is known to be managed by scripts/migrate.mts. */
 let schemaManagedByMigrations = false;
@@ -359,7 +341,7 @@ async function handleRequest(request: Request) {
       const rawProjectReport = String(body.projectReport || body.projectReportUrl || "").trim();
       const rawAadhar = String(body.aadharNumber || body.aadhar || "").trim().replace(/[\s-]/g, "");
       const aadharNumber = rawAadhar ? rawAadhar : null;
-      const rawPan = String(body.panNumber || body.pan || "").trim().toUpperCase();
+      const rawPan = String(body.panNumber || body.pan || "").replace(/[\s-]/g, "").toUpperCase();
       const panNumber = rawPan ? rawPan : null;
       const city = String(body.city || "").trim();
       const state = String(body.state || "").trim();
@@ -443,6 +425,13 @@ async function handleRequest(request: Request) {
       if (!aadharNumber || !isValidAadhaar(aadharNumber)) {
         return Response.json(
           { message: "A valid 12-digit Aadhaar Card number is required. Please check it against your Aadhaar card." },
+          { status: 400 }
+        );
+      }
+      // PAN is optional; when given it must have the PAN format (same rule as the form).
+      if (panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panNumber)) {
+        return Response.json(
+          { message: "Please enter a valid 10-character PAN Card number (e.g. ABCDE1234F) or leave it blank." },
           { status: 400 }
         );
       }

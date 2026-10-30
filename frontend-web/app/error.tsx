@@ -19,7 +19,8 @@ export default function ErrorBoundary({
         <div style={{ fontSize: "2.5rem" }}>⚠️</div>
         <h1 style={{ fontSize: "1.8rem", margin: 0, color: "var(--ink)" }}>Something went wrong</h1>
         <p className="muted" style={{ margin: "0 auto", maxWidth: 450 }}>
-          {error?.message || "An unexpected error occurred while loading this page. Please try again or return home."}
+          An unexpected error occurred while loading this page. Please try again or return home.
+          {error?.digest ? ` (Reference: ${error.digest})` : ""}
         </p>
         <div className="actions" style={{ justifyContent: "center", marginTop: 12 }}>
           <button className="btn btn-primary" onClick={() => reset()}>

@@ -14,7 +14,8 @@ export default function GlobalError({
         <div style={{ maxWidth: 540, margin: "60px auto", padding: 32, background: "#fff", borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.06)", textAlign: "center" }}>
           <h1 style={{ fontSize: "1.8rem", marginBottom: 12 }}>Application Error</h1>
           <p style={{ color: "#5a6864", marginBottom: 24 }}>
-            {error?.message || "An unexpected error occurred. Please refresh or try again."}
+            An unexpected error occurred. Please refresh or try again.
+            {error?.digest ? ` (Reference: ${error.digest})` : ""}
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
             <button

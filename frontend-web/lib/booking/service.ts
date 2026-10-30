@@ -117,7 +117,8 @@ export interface AuditEvent {
     | "booking_cancelled"
     | "stall_disabled"
     | "stall_enabled"
-    | "team_approval_changed";
+    | "team_approval_changed"
+    | "inventory_changed";
   actor: { type: "leader"; userId: string } | { type: "admin"; adminId: string } | { type: "system" };
   teamId?: string | null;
   stallId?: string | null;

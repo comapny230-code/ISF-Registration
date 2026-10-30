@@ -585,7 +585,12 @@ export default function RegisterPage() {
       }
     } catch (err: any) {
       console.error("[REGISTRATION FATAL]", err);
-      handleFormError(err.message || "An unexpected network or server error occurred.");
+      // fetch() rejects (TypeError) only when the server could not be reached at all.
+      handleFormError(
+        err instanceof TypeError
+          ? "We could not reach the server. Check your internet connection and submit again; your details are still filled in."
+          : err.message || "An unexpected network or server error occurred."
+      );
     } finally {
       setBusy(false);
     }

@@ -111,3 +111,24 @@ test("REG-E2E: with organiser approval required, a new team is told it is awaiti
   await page.locator(`svg [data-stall-code="${stall.code}"]`).click();
   await expect(page.getByRole("button", { name: "Book my stall" })).toBeDisabled();
 });
+
+test("REG-E2E: if the network drops on submit, the details stay filled in and submitting again registers once", async ({ page }) => {
+  await resetBooking();
+  await seedStalls(1);
+  let attempts = 0;
+  await page.route("**/v1/auth/register", async (route) => {
+    attempts += 1;
+    if (attempts === 1) await route.abort("internetdisconnected");
+    else await route.continue();
+  });
+  const team = await fillRegistration(page); // its submit hits the dropped connection
+  await expect(page.getByText("We could not reach the server").first()).toBeVisible();
+  await expect(page.locator("#teamName")).toHaveValue(team);
+
+  await page.locator("button.btn-submit-summit").click();
+  await expect(page.getByTestId("book-stall-section")).toContainText("Next step: book your stall");
+  const { db } = await import("./support");
+  const s = await db();
+  const [row] = await s`select count(*)::int as n from startup_team_leaders where team_name = ${team}`;
+  expect(row.n).toBe(1);
+});

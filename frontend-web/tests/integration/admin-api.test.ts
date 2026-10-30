@@ -220,7 +220,7 @@ describe("E10/E13/E15 lists", () => {
     const ids = all.body!.items.map((i: any) => i.bookingId);
     expect(ids).toEqual(expect.arrayContaining([a.bookingId, b.bookingId]));
     const item = all.body!.items.find((i: any) => i.bookingId === b.bookingId);
-    expect(item).toMatchObject({ status: "confirmed", leaderEmail: b.leader.email, leaderMobile: "1", track: "senior" });
+    expect(item).toMatchObject({ status: "confirmed", leaderEmail: b.leader.email, leaderMobile: b.leader.mobile, track: "senior" });
     expect(Object.keys(item)).not.toContain("cancelReason");
     expect(JSON.stringify(all.body)).not.toMatch(/aadhar|aadhaar|pan_number|panNumber/i);
 

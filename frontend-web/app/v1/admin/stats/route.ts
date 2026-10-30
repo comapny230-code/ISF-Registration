@@ -10,11 +10,12 @@ export const GET = handler(async (request, { requestId }) => {
   // 1. Registrations stats
   const [senior] = await sql`select count(*)::int as count from public.startup_team_leaders where edition_id = ${EDITION_ID}`;
   const [junior] = await sql`select count(*)::int as count from public.student_innovators where edition_id = ${EDITION_ID}`;
+  // Members of both tracks (each member row belongs to one registration).
   const [members] = await sql`
-    select count(*)::int as count 
-      from public.startup_team_members m
-      join public.startup_team_leaders l on l.user_id = m.leader_user_id and l.edition_id = ${EDITION_ID}`;
-
+    select (select count(*)::int from public.startup_team_members m
+              join public.startup_team_leaders l on l.user_id = m.leader_user_id and l.edition_id = ${EDITION_ID})
+         + (select count(*)::int from public.student_team_members m
+              join public.student_innovators s on s.id = m.student_innovator_id and s.edition_id = ${EDITION_ID}) as count`;
   const totalTeams = (senior?.count ?? 0) + (junior?.count ?? 0);
   const totalMembers = members?.count ?? 0;
   const totalUsers = totalTeams + totalMembers;
@@ -29,46 +30,34 @@ export const GET = handler(async (request, { requestId }) => {
                 else 'available' end as status
       from d
       cross join booking.stalls s
-      left join booking.zones z on z.id = s.zone_id
+      join booking.zones z on z.id = s.zone_id
       left join booking.reservations r on r.stall_id = s.id and r.status in ('held', 'confirmed')
      where s.edition_id = ${EDITION_ID} and s.inventory_status <> 'retired'`;
 
-  let totalStalls = stallRows.length;
+  const totalStalls = stallRows.length;
   let bookedStalls = 0;
   let heldStalls = 0;
   let availableStalls = 0;
   let disabledStalls = 0;
 
-  const byZone: Record<string, { total: number; booked: number; held: number; available: number; disabled: number }> = {
-    PG: { total: 0, booked: 0, held: 0, available: 0, disabled: 0 },
-    BB: { total: 0, booked: 0, held: 0, available: 0, disabled: 0 },
-  };
-
-  // If database is empty or fallback is active, default to 98 stalls
-  if (totalStalls === 0) {
-    totalStalls = 98;
-    availableStalls = 98;
-    byZone.PG = { total: 48, booked: 0, held: 0, available: 48, disabled: 0 };
-    byZone.BB = { total: 50, booked: 0, held: 0, available: 50, disabled: 0 };
-  } else {
-    for (const r of stallRows) {
-      const z = r.zone || "PG";
-      if (!byZone[z]) byZone[z] = { total: 0, booked: 0, held: 0, available: 0, disabled: 0 };
-      byZone[z].total++;
-
-      if (r.status === "booked") {
-        bookedStalls++;
-        byZone[z].booked++;
-      } else if (r.status === "held") {
-        heldStalls++;
-        byZone[z].held++;
-      } else if (r.status === "unavailable" || r.admin_status === "disabled") {
-        disabledStalls++;
-        byZone[z].disabled++;
-      } else {
-        availableStalls++;
-        byZone[z].available++;
-      }
+  const byZone: Record<string, { total: number; booked: number; held: number; available: number; disabled: number }> = {};
+  // No stalls loaded (e.g. before the organisers approve the inventory) is reported as zero.
+  for (const r of stallRows) {
+    const z = r.zone as string;
+    byZone[z] ??= { total: 0, booked: 0, held: 0, available: 0, disabled: 0 };
+    byZone[z].total++;
+    if (r.status === "booked") {
+      bookedStalls++;
+      byZone[z].booked++;
+    } else if (r.status === "held") {
+      heldStalls++;
+      byZone[z].held++;
+    } else if (r.status === "unavailable") {
+      disabledStalls++;
+      byZone[z].disabled++;
+    } else {
+      availableStalls++;
+      byZone[z].available++;
     }
   }
 

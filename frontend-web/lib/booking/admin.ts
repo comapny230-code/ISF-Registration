@@ -10,6 +10,7 @@
  */
 import type postgres from "postgres";
 import { EDITION_ID } from "../auth/leader";
+import { getDb } from "../db";
 import { HttpError } from "../http";
 import { audit, decide, evaluate, lockStalls, markExpired } from "./service";
 import { fail, ok, retryLater, withBookingTx, type TxOutcome } from "./tx";
@@ -182,6 +183,183 @@ export async function setStallAvailability(
          where id = ${stallId}`;
       await audit(tx, { action: "stall_disabled", actor: { type: "admin", adminId }, stallId, requestId: httpRequestId, reason });
       return result("disabled", true, releasedHoldId);
+    })
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inventory management from the admin console: add, edit and retire stalls
+// ---------------------------------------------------------------------------
+
+export interface StallInput {
+  zone?: string;
+  code?: string;
+  width?: number;
+  depth?: number;
+  x?: number;
+  y?: number;
+  rotation?: number;
+}
+
+export interface StallView {
+  id: string;
+  code: string;
+  zone: string;
+  width: number;
+  depth: number;
+  x: number | null;
+  y: number | null;
+  rotation: number | null;
+  inventoryStatus: string;
+  adminStatus: string;
+}
+
+const STALL_CODE = /^[A-Z]{2}-[A-Z][0-9]{2}$/;
+
+function measure(raw: Record<string, unknown>, field: keyof StallInput, check: (n: number) => boolean, rule: string): number | undefined {
+  const value = raw[field];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || !check(value)) {
+    throw new HttpError(400, "VALIDATION", `${field} must be ${rule}.`, { field });
+  }
+  return value;
+}
+
+/** Validates the optional measurements; a stall code is checked separately because it is permanent. */
+export function parseStallInput(raw: Record<string, unknown>): StallInput {
+  const zone = typeof raw.zone === "string" ? raw.zone.trim().toUpperCase() : undefined;
+  const code = typeof raw.code === "string" ? raw.code.trim().toUpperCase() : undefined;
+  if (raw.code !== undefined && (code === undefined || !STALL_CODE.test(code))) {
+    throw new HttpError(400, "VALIDATION", "code must look like PG-A01.", { field: "code" });
+  }
+  return {
+    zone,
+    code,
+    width: measure(raw, "width", (n) => n > 0 && n <= 100, "a number of feet above 0 and at most 100"),
+    depth: measure(raw, "depth", (n) => n > 0 && n <= 100, "a number of feet above 0 and at most 100"),
+    x: measure(raw, "x", (n) => n >= 0 && n <= 10000, "a number of feet from 0 to 10000"),
+    y: measure(raw, "y", (n) => n >= 0 && n <= 10000, "a number of feet from 0 to 10000"),
+    rotation: measure(raw, "rotation", (n) => n >= 0 && n < 360, "a number of degrees from 0 to below 360"),
+  };
+}
+
+async function stallView(tx: postgres.TransactionSql, stallId: string): Promise<StallView> {
+  const [s] = await tx`
+    select s.id, s.code, z.code as zone, s.width_ft, s.depth_ft, s.x_ft, s.y_ft, s.rotation_deg, s.inventory_status, s.admin_status
+      from booking.stalls s join booking.zones z on z.id = s.zone_id where s.id = ${stallId}`;
+  const num = (v: unknown) => (v === null ? null : Number(v));
+  return {
+    id: s.id, code: s.code, zone: s.zone, width: Number(s.width_ft), depth: Number(s.depth_ft),
+    x: num(s.x_ft), y: num(s.y_ft), rotation: num(s.rotation_deg), inventoryStatus: s.inventory_status, adminStatus: s.admin_status,
+  };
+}
+
+/**
+ * Adds an approved stall (an organiser decision taken in the console) to an existing zone. The
+ * code's prefix must name the zone, and a position is required: an approved stall needs one.
+ */
+export async function createStall(adminId: string, input: StallInput, httpRequestId: string): Promise<StallView> {
+  if (!input.zone || !/^[A-Z]{2}$/.test(input.zone)) throw new HttpError(400, "VALIDATION", "zone must be a two-letter zone code.", { field: "zone" });
+  if (!input.code) throw new HttpError(400, "VALIDATION", "code is required.", { field: "code" });
+  if (!input.code.startsWith(`${input.zone}-`)) {
+    throw new HttpError(400, "VALIDATION", `A stall in zone ${input.zone} must have a code starting with ${input.zone}-.`, { field: "code" });
+  }
+  if (input.x === undefined || input.y === undefined) throw new HttpError(400, "VALIDATION", "x and y (the stall's position) are required.", { field: "x" });
+  const sql = await getDb();
+  return sql.begin(async (tx) => {
+    const [zone] = await tx`select id from booking.zones where code = ${input.zone!} and edition_id = ${EDITION_ID}`;
+    if (!zone) throw new HttpError(404, "ZONE_NOT_FOUND", `Zone ${input.zone} was not found.`);
+    const [created] = await tx`
+      insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
+      values (${EDITION_ID}, ${zone.id}, ${input.code!}, ${input.width ?? 10}, ${input.depth ?? 10}, ${input.x!}, ${input.y!},
+              ${input.rotation ?? 0}, 'approved', ${`admin console (${adminId})`})
+      on conflict (edition_id, code) do nothing
+      returning id`;
+    if (!created) throw new HttpError(409, "STALL_EXISTS", `A stall with code ${input.code} already exists.`);
+    await audit(tx, {
+      action: "inventory_changed", actor: { type: "admin", adminId }, stallId: created.id, requestId: httpRequestId,
+      details: { change: "stall_added", code: input.code, zone: input.zone },
+    });
+    return stallView(tx, created.id);
+  });
+}
+
+/** Changes a stall's size or position. Its code is permanent (stalls_guard), so renaming is refused. */
+export async function updateStall(adminId: string, stallId: string, input: StallInput, httpRequestId: string): Promise<StallView> {
+  const sql = await getDb();
+  return sql.begin(async (tx) => {
+    const [stall] = await tx`select id, code from booking.stalls where id = ${stallId} and edition_id = ${EDITION_ID} for update`;
+    if (!stall) throw new HttpError(404, "STALL_NOT_FOUND", "Stall not found.");
+    if (input.code !== undefined && input.code !== stall.code) {
+      throw new HttpError(400, "STALL_CODE_IMMUTABLE", "A stall code cannot be changed. Retire the stall and add a new one instead.", { field: "code" });
+    }
+    const changes = { width: input.width, depth: input.depth, x: input.x, y: input.y, rotation: input.rotation };
+    await tx`
+      update booking.stalls
+         set width_ft = coalesce(${input.width ?? null}::numeric, width_ft),
+             depth_ft = coalesce(${input.depth ?? null}::numeric, depth_ft),
+             x_ft = coalesce(${input.x ?? null}::numeric, x_ft),
+             y_ft = coalesce(${input.y ?? null}::numeric, y_ft),
+             rotation_deg = coalesce(${input.rotation ?? null}::numeric, rotation_deg),
+             updated_at = now()
+       where id = ${stallId}`;
+    await audit(tx, {
+      action: "inventory_changed", actor: { type: "admin", adminId }, stallId, requestId: httpRequestId,
+      details: { change: "stall_edited", code: stall.code, ...Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)) },
+    });
+    return stallView(tx, stallId);
+  });
+}
+
+export interface RetireResult {
+  stallId: string;
+  stallCode: string;
+  changed: boolean;
+}
+
+/**
+ * Retires a stall (removes it from the map and from booking). Refused while it is booked or held;
+ * a hold that has run out is first marked expired. Reservation history is kept.
+ */
+export async function retireStall(adminId: string, stallId: string, httpRequestId: string): Promise<RetireResult> {
+  return withRestart(() =>
+    withBookingTx(async (tx): Promise<TxOutcome<RetireResult>> => {
+      const [exists] = await tx`select id from booking.stalls where id = ${stallId} and edition_id = ${EDITION_ID}`;
+      if (!exists) throw new HttpError(404, "STALL_NOT_FOUND", "That stall does not exist.");
+
+      const [claimSeen] = await tx`
+        select id, team_id from booking.reservations where stall_id = ${stallId} and status in ('held', 'confirmed')`;
+      if (claimSeen) await tx`select id from booking.teams where id = ${claimSeen.team_id} for update`; // L1
+      await lockStalls(tx, [stallId]); // L2
+      const live = await tx`
+        select id from booking.reservations where stall_id = ${stallId} and status in ('held', 'confirmed')
+         order by id for update`; // L3
+      if ((live[0]?.id ?? null) !== (claimSeen?.id ?? null)) throw new LockRace();
+
+      const d = await decide(tx);
+      const [stall] = await tx`select code, inventory_status from booking.stalls where id = ${stallId}`;
+      if (live[0]) {
+        const [claim] = await evaluate(tx, [live[0].id], d.decided);
+        if (claim.status === "confirmed") {
+          return fail(new HttpError(409, "STALL_HAS_BOOKING", "This stall has a confirmed booking. The booking must be cancelled first."));
+        }
+        if (claim.unexpired) {
+          return fail(
+            new HttpError(409, "STALL_HAS_ACTIVE_HOLD", "A team is holding this stall. Try again after the hold ends.", {
+              holdExpiresAt: claim.expires_at,
+            })
+          );
+        }
+        await markExpired(tx, claim, d.decided, httpRequestId);
+      }
+
+      if (stall.inventory_status === "retired") return ok({ stallId, stallCode: stall.code as string, changed: false });
+      await tx`update booking.stalls set inventory_status = 'retired', updated_at = now() where id = ${stallId}`;
+      await audit(tx, {
+        action: "inventory_changed", actor: { type: "admin", adminId }, stallId, requestId: httpRequestId,
+        details: { change: "stall_retired", code: stall.code, from: stall.inventory_status },
+      });
+      return ok({ stallId, stallCode: stall.code as string, changed: true });
     })
   );
 }

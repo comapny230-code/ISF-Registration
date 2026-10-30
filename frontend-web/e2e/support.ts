@@ -84,7 +84,7 @@ export async function createLeader(opts: { session?: boolean } = {}): Promise<Le
   const [user] = await s`insert into user_accounts (email, full_name) values (${email}, ${`E2E Leader ${n}`}) returning id`;
   const [leader] = await s`
     insert into startup_team_leaders (user_id, team_name, full_name, email, mobile, alt_mobile, domain, city, state, linkedin_url, edition_id)
-    values (${user.id}, ${teamName}, ${`E2E Leader ${n}`}, ${email}, '1', '2', 'd', 'c', 's', 'l', 2026) returning id`;
+    values (${user.id}, ${teamName}, ${`E2E Leader ${n}`}, ${email}, ${`8${tag.slice(-9)}`}, '2', 'd', 'c', 's', 'l', 2026) returning id`;
   await s`
     insert into booking.teams (edition_id, leader_user_id, track, startup_team_leader_id, team_name_snapshot)
     values (2026, ${user.id}, 'senior', ${leader.id}, ${teamName})`;

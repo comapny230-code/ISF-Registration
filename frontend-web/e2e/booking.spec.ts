@@ -193,3 +193,28 @@ test("an ineligible team sees why and cannot hold", async ({ page, context }) =>
   await stall(page, "PG-A01").click();
   await expect(page.getByRole("button", { name: "Book my stall" })).toBeDisabled();
 });
+
+test("ZERO-STALLS: with zones but no stalls loaded, visitors and leaders see that the layout is not published yet", async ({ page, context }) => {
+  // The live state after migration 0012: synthetic provisional zones, no stalls at all.
+  await resetBooking();
+  const s = await db();
+  await s`
+    insert into booking.zones (edition_id, code, name, extent_width_ft, extent_depth_ft, inventory_status, source_ref)
+    values (2026, 'PG', 'Synthetic zone PG', 338, 402, 'provisional', 'e2e'),
+           (2026, 'BB', 'Synthetic zone BB', 101, 305, 'provisional', 'e2e')`;
+  await s`update booking.settings set public_map = true where edition_id = 2026`;
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  await page.goto("/book-your-stall");
+  await expect(page.getByTestId("layout-pending")).toContainText("has not been published yet");
+  await expect(page.getByRole("tablist", { name: "Venue areas" })).toHaveCount(0);
+
+  const leader = await createLeader();
+  await signIn(context, leader);
+  await page.reload();
+  await expect(page.getByTestId("layout-pending")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Book my stall" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+  await s`update booking.settings set public_map = false where edition_id = 2026`;
+});

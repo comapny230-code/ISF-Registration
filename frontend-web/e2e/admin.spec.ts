@@ -106,3 +106,33 @@ test("E2E-08: a stale sign-in triggers step-up inside the dialog and the action 
   const [count] = await s`select count(*)::int as n from booking.audit_events where stall_id = ${stall.id} and action = 'stall_disabled'`;
   expect(count.n).toBe(1);
 });
+
+test("ADM-MGMT: an organiser deletes a registration and retires a stall from the console", async ({ page, context }) => {
+  await resetBooking();
+  const [stall] = await seedStalls(2);
+  const leader = await createLeader({ session: false });
+  const admin = await createAdminUser(["reports.view", "booking.cancel", "inventory.manage", "teams.manage"]);
+  await signInAdmin(context, admin);
+  await page.goto("/admin");
+
+  // Delete a registration (the browser sends DELETE as same-origin JSON).
+  await page.getByRole("tab", { name: "Registrations" }).click();
+  const regRow = page.locator(`tr[data-team-name="${leader.teamName}"]`);
+  await regRow.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("dialog").getByLabel(/Mandatory reason for audit/).fill(REASON);
+  await page.getByRole("dialog").getByRole("button", { name: "Delete registration" }).click();
+  await expect(page.getByTestId("admin-notice")).toContainText(`Deleted team ${leader.teamName}.`);
+  const s = await db();
+  const [gone] = await s`select count(*)::int as n from user_accounts where id = ${leader.userId}`;
+  expect(gone.n).toBe(0);
+
+  // Retire a stall.
+  await page.getByRole("tab", { name: "Stalls" }).click();
+  const stallRow = page.locator(`tr[data-stall-code="${stall.code}"]`);
+  await stallRow.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("dialog").getByLabel(/Mandatory reason for audit/).fill(REASON);
+  await page.getByRole("dialog").getByRole("button", { name: "Delete stall" }).click();
+  await expect(page.getByTestId("admin-notice")).toContainText(`Stall ${stall.code} deleted.`);
+  const [retired] = await s`select inventory_status from booking.stalls where id = ${stall.id}`;
+  expect(retired.inventory_status).toBe("retired");
+});
