@@ -127,6 +127,8 @@ export const adminApi = {
     post<{ ok: true; admin: { id: string; email: string; displayName: string } }>(`/v1/admin/users`, data),
   cancel: (bookingId: string, reason: string, requestId: string) =>
     post(`/v1/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, { reason, requestId }),
+  approveBooking: (bookingId: string) =>
+    post<{ ok: true; sent: boolean; message: string }>(`/v1/admin/bookings/${encodeURIComponent(bookingId)}/approve`, {}),
   availability: (stallId: string, action: "disable" | "enable", reason: string, force: boolean, requestId: string) =>
     post(`/v1/admin/stalls/${encodeURIComponent(stallId)}/availability`, { action, reason, force, requestId }),
   approval: (teamId: string, status: "approved" | "rejected" | "pending", reason: string, requestId: string) =>

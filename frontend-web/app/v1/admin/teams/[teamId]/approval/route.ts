@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth/guards";
 import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
 import { setTeamApproval } from "@/lib/booking/admin";
+import { sendRegistrationApprovalEmail } from "@/lib/booking/booking-email";
 import { assertSameOriginJson, handler, json, readJsonObject, strict, v } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -17,5 +18,13 @@ export const POST = handler<{ teamId: string }>(async (request, { requestId, par
   });
   await consumeRateLimit(sql, LIMITS.adminWritePerAdmin, session.principalId);
 
-  return json(await setTeamApproval(session.principalId, teamId, body.status, body.reason, requestId), 200, requestId);
+  const result = await setTeamApproval(session.principalId, teamId, body.status, body.reason, requestId);
+  if (body.status === "approved" && result.changed) {
+    try {
+      await sendRegistrationApprovalEmail(sql, teamId, body.reason);
+    } catch (mailErr) {
+      console.error("[APPROVAL EMAIL ERROR]", mailErr);
+    }
+  }
+  return json(result, 200, requestId);
 });

@@ -1410,7 +1410,27 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
                       <div className="muted small">{b.leaderEmail}</div>
                     </td>
                     <td className={styles.status}>{b.status}</td>
-                    <td>
+                    <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {b.status === "confirmed" && (
+                        <button
+                          type="button"
+                          className={styles.listButton}
+                          style={{ color: "#047857", borderColor: "#a7f3d0" }}
+                          onClick={() =>
+                            setAction({
+                              title: `Approve & email stall pass for ${b.bookingRef}?`,
+                              description: `Dispatches the official stall booking confirmation pass to ${b.leaderEmail}.`,
+                              confirmLabel: "Send Booking Pass",
+                              run: async () => {
+                                const res = await adminApi.approveBooking(b.bookingId);
+                                return res.message;
+                              },
+                            })
+                          }
+                        >
+                          Approve &amp; Email Pass
+                        </button>
+                      )}
                       {b.status === "confirmed" && can("booking.cancel") && (
                         <button
                           type="button"
