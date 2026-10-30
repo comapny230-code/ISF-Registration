@@ -1,4 +1,5 @@
-import { verifyPassword } from "@/lib/auth/password";
+import { randomBytes } from "node:crypto";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
 import { createSession, SESSION_COOKIE } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -15,6 +16,10 @@ import {
 } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
+
+// Checked when the address has no password, so the reply takes as long as a real check and does
+// not reveal which administrator addresses exist.
+const NO_ACCOUNT_HASH = hashPassword(randomBytes(32).toString("hex"));
 
 export const POST = handler(async (request, { requestId }) => {
   assertSameOriginJson(request);
@@ -35,7 +40,8 @@ export const POST = handler(async (request, { requestId }) => {
      where lower(a.email) = ${emailNorm} and a.status = 'active'
        and exists (select 1 from app_auth.admin_grants g where g.admin_user_id = a.id and g.revoked_at is null)`;
 
-  if (!admin || !verifyPassword(body.password, admin.password_hash as string | null)) {
+  const passwordOk = verifyPassword(body.password, (admin?.password_hash as string | null) || NO_ACCOUNT_HASH);
+  if (!admin || !admin.password_hash || !passwordOk) {
     throw new HttpError(401, "INVALID_CREDENTIALS", "Invalid administrator email or password.");
   }
 

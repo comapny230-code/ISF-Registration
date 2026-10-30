@@ -398,3 +398,22 @@ describe("ADM-MGMT administrator accounts and password sign-in", () => {
     expect((await login(email, "a-long-new-passphrase")).status).toBe(200);
   });
 });
+
+describe("ADM-MGMT booking pass email", () => {
+  it("needs booking.cancel: a read-only admin cannot send official emails to teams", async () => {
+    const approveRoute = await import("@/app/v1/admin/bookings/[bookingId]/approve/route");
+    const leader = await createLeader();
+    const [stall] = await seedStalls(1);
+    const held = await hold(leader.cookie, stall.id);
+    const booked = await confirm(leader.cookie, held.body!.holdId, held.body!.token);
+    const bookingId = booked.body!.bookingId as string;
+    const send = (cookie: string) =>
+      call(withParams(approveRoute.POST, { bookingId }), apiRequest(`/v1/admin/bookings/${bookingId}/approve`, {}, { cookie }));
+    const viewer = await createAdmin(["reports.view"]);
+    expect((await send(viewer.cookie)).status).toBe(403);
+    const manager = await createAdmin(["booking.cancel"]);
+    const ok = await send(manager.cookie);
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body!.sent).toBe(true);
+  });
+});

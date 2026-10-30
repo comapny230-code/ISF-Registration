@@ -109,3 +109,23 @@ Eight commits were pushed straight to `main` and `feature/book-your-stall` (book
 Kept from the collaborator: DPDP consent checkbox, no-overwrite rules (email, Aadhaar, PAN, primary phone; a team member's address can no longer register as a leader), admin tabs and CRUD, password sign-in for admins, public booking page with sign-in dialog, booking page on by default.
 
 Verification (merged + fixed tree): typecheck OK; Vitest 335/335; `next build` OK; Playwright 21/21.
+
+## Security review — 2026-10-30 (after merging main 49083fe)
+
+Scope: the merged branch (code, migrations, live Supabase advisors read-only). No production changes.
+
+| # | Finding | Severity | Status |
+|---|---|---|---|
+| S-01 | `main`'s ADMIN_EMAIL/ADMIN_PASSWORD sign-in swallowed rate-limit errors (unlimited guessing), re-enabled disabled admins and compared plain-text passwords | High | Not merged; env admin ignored (test ADM-MGMT); delete both variables in Vercel |
+| S-02 | `main` accepted a registration with the consent field missing | High (legal) | Consent must be exactly `true` (REG-RULES) |
+| S-03 | Admin registrations CSV export: formula injection (`=HYPERLINK…`) and unquoted cells | Medium | `lib/csv.ts` quotes every cell and neutralises formula starters (CSV-EXPORT) |
+| S-04 | "Send booking pass" email endpoint allowed read-only admins (`reports.view`) | Medium | Requires `booking.cancel` (ADM-MGMT) |
+| S-05 | Admin password login answered faster for unknown addresses (account enumeration by timing) | Low | Dummy hash check for unknown addresses |
+| S-06 | Guard trigger functions without a fixed search_path (Supabase lint 0011) | Low | Migration `0013_guard_functions_search_path.sql` (DB-SEARCHPATH) |
+| S-07 | `public.rls_auto_enable()` executable by anon/authenticated (lint 0028/0029) | Low | Fixed by 0011 once applied |
+| S-08 | nodemailer moderate advisories (fixed in ≥ 10.1.4) | Medium | Mitigated in code (plain single addresses only); upgrade to 10.1.7 on or after 2026-11-01 (two-week release-age rule) |
+| S-09 | Unreachable database errors told visitors to check `DATABASE_URL` (main) | Low | Generic 503 with Retry-After (HTTP-ERR) |
+
+Checked with no finding: per-route authorisation (AUTH-15), SQL built only with parameters, no `dangerouslySetInnerHTML`, user links in the admin console limited to http(s), uploads limited to https or typed data URLs with size caps, email HTML escaped, email links built from APP_ORIGIN (not the Host header), sessions and cookies, CSRF, open redirects, secret scan clean. RLS "enabled, no policy" (22 tables) is intended: the Data API sees nothing.
+
+Not fixable in code (owner actions): credentials still readable in git history until rotated; the app connects as the owner until `isf_app` exists (after migrations); no branch protection on `main`.

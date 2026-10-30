@@ -1,4 +1,5 @@
 "use client";
+import { csvCell } from "@/lib/csv";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   adminApi,
@@ -873,14 +874,14 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
     const rows = registrations.map((r) => [
       r.id,
       r.track,
-      `"${r.teamName.replace(/"/g, '""')}"`,
-      `"${r.leaderName.replace(/"/g, '""')}"`,
+      r.teamName,
+      r.leaderName,
       r.email,
       r.mobile,
       r.altMobile || "",
-      `"${r.domain.replace(/"/g, '""')}"`,
-      `"${r.city.replace(/"/g, '""')}"`,
-      `"${r.state.replace(/"/g, '""')}"`,
+      r.domain,
+      r.city,
+      r.state,
       r.country,
       r.linkedinUrl || "",
       r.projectReportUrl || "",
@@ -891,7 +892,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
       r.createdAt,
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const csvContent = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
