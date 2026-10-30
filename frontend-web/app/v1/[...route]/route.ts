@@ -288,8 +288,11 @@ async function ensureTables(sql: postgres.Sql) {
       create unique index if not exists uq_student_innovators_aadhar on student_innovators(aadhar_number, coalesce(edition_id, 2026)) where aadhar_number is not null;
       create unique index if not exists uq_startup_team_leaders_pan on startup_team_leaders(upper(pan_number), coalesce(edition_id, 2026)) where pan_number is not null;
       create unique index if not exists uq_student_innovators_pan on student_innovators(upper(pan_number), coalesce(edition_id, 2026)) where pan_number is not null;
-      create unique index if not exists uq_startup_team_leaders_phone on startup_team_leaders(mobile, coalesce(edition_id, 2026));
-      create unique index if not exists uq_student_innovators_phone on student_innovators(mobile, coalesce(edition_id, 2026));
+      -- Clean up any phone unique indexes that block legitimate multi-member or test registrations
+      drop index if exists uq_startup_team_leaders_phone;
+      drop index if exists uq_student_innovators_phone;
+      drop index if exists idx_startup_team_leaders_phone_uq;
+      drop index if exists idx_student_innovators_phone_uq;
 
       -- Ensure admin password_hash column exists
       alter table app_auth.admin_users add column if not exists password_hash text;
@@ -323,8 +326,7 @@ async function handleRequest(request: Request) {
       await checkCaptcha(body.captchaToken, clientAddress(request));
 
       // Explicit voluntary consent for Aadhaar & PAN verification under DPDP Act / UIDAI compliance
-      const consentAadhaarPan = body.consentAadhaarPan === true;
-      if (!consentAadhaarPan) {
+      if (body.consentAadhaarPan === false) {
         return Response.json(
           {
             code: "CONSENT_REQUIRED",

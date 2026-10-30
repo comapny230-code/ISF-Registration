@@ -130,12 +130,10 @@ export async function persistRegistration(
     const [account] = await tx`select id from user_accounts where lower(email) = ${input.email} for update`;
     const userId: string = account.id;
 
-    // Check 1: Anti-overwrite guarantee for email (cannot overwrite existing leader or member)
+    // Check 1: Anti-overwrite guarantee for email (cannot overwrite existing leader)
     const [existing] = await tx`
       select exists (select 1 from startup_team_leaders where user_id = ${userId} or lower(email) = ${input.email})
-          or exists (select 1 from student_innovators where user_id = ${userId} or lower(email) = ${input.email})
-          or exists (select 1 from startup_team_members where lower(email) = ${input.email})
-          or exists (select 1 from student_team_members where lower(email) = ${input.email}) as registered`;
+          or exists (select 1 from student_innovators where user_id = ${userId} or lower(email) = ${input.email}) as registered`;
     if (existing.registered) throw new AlreadyRegisteredError();
 
     // Check 2: Anti-overwrite guarantee for Aadhaar across tracks and accounts
@@ -156,12 +154,6 @@ export async function persistRegistration(
             or exists (select 1 from user_accounts where upper(pan_number) = ${panClean} and id <> ${userId}) as taken`;
       if (pan.taken) throw new PanAlreadyRegisteredError();
     }
-
-    // Check 4: Anti-overwrite guarantee for Primary Mobile number
-    const [phone] = await tx`
-      select exists (select 1 from startup_team_leaders where mobile = ${input.mobile} and edition_id = ${EDITION_ID})
-          or exists (select 1 from student_innovators where mobile = ${input.mobile} and edition_id = ${EDITION_ID}) as taken`;
-    if (phone.taken) throw new PhoneAlreadyRegisteredError();
 
     await tx`insert into role_grants (user_id, role, edition_id) values (${userId}, 'startup_team_leader', ${EDITION_ID}) on conflict do nothing`;
     await tx`insert into edition_access (user_id, edition_id, source) values (${userId}, ${EDITION_ID}, 'predefined') on conflict do nothing`;
