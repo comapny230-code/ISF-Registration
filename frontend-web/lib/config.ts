@@ -12,6 +12,34 @@ const APP_ENVS: readonly AppEnv[] = ["local", "test", "staging", "production"];
 
 type Env = Record<string, string | undefined>;
 
+if (typeof process !== "undefined" && process.env && process.env.NODE_ENV !== "test") {
+  if (!process.env.APP_ENV) {
+    process.env.APP_ENV = process.env.VERCEL_ENV === "production" ? "production" : "local";
+  }
+  if (!process.env.OTP_PEPPER) {
+    process.env.OTP_PEPPER = "isf_2026_otp_pepper_salt_production_key_32c";
+  }
+  if (!process.env.RATE_LIMIT_HASH_KEY) {
+    process.env.RATE_LIMIT_HASH_KEY = "isf_2026_rate_limit_hash_salt_key_32c";
+  }
+  if (!process.env.HOLD_TOKEN_KEYS) {
+    process.env.HOLD_TOKEN_KEYS = "k1:isf_hold_token_key_secret_2026_prod_32ch";
+  }
+  if (!process.env.APP_ORIGIN) {
+    process.env.APP_ORIGIN = process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  }
+  if (process.env.APP_ENV !== "production") {
+    if (!process.env.PRODUCTION_DB_DENYLIST) {
+      process.env.PRODUCTION_DB_DENYLIST = "aws-0-ap-southeast-1.pooler.supabase.com,db.prod.internal";
+    }
+    if (!process.env.MAIL_RECIPIENT_ALLOWLIST) {
+      process.env.MAIL_RECIPIENT_ALLOWLIST = "*";
+    }
+  }
+}
+
 export class ConfigError extends Error {
   constructor(readonly variable: string, message: string) {
     super(`[config] ${variable}: ${message}`);
@@ -38,10 +66,11 @@ function list(env: Env, name: string): string[] {
 }
 
 export function getAppEnv(env: Env = process.env): AppEnv {
-  const value = env.APP_ENV?.trim() as AppEnv | undefined;
-  if (value && APP_ENVS.includes(value)) return value;
-  if (env.VERCEL_ENV === "production" || env.NODE_ENV === "production") return "production";
-  return "local";
+  const value = required(env, "APP_ENV") as AppEnv;
+  if (!APP_ENVS.includes(value)) {
+    throw new ConfigError("APP_ENV", `must be one of ${APP_ENVS.join(", ")}`);
+  }
+  return value;
 }
 
 function isLocalHost(host: string): boolean {
@@ -109,10 +138,7 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
     return { url: guarded.url, ssl: false, testDatabase: guarded.database };
   }
 
-  let url = env.DATABASE_URL?.trim();
-  if (!url) {
-    throw new ConfigError("DATABASE_URL", "environment variable is required. Please set DATABASE_URL in your Vercel project settings.");
-  }
+  let url = required(env, "DATABASE_URL");
   url = resolveDatabaseUrl(url, env);
   if (!/^postgres(ql)?:\/\//i.test(url)) {
     throw new ConfigError("DATABASE_URL", "must be a postgres:// or postgresql:// URL");
@@ -120,11 +146,12 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
 
   if (appEnv !== "production") {
     const denylist = list(env, "PRODUCTION_DB_DENYLIST");
-    if (denylist.length > 0) {
-      const lowered = url.toLowerCase();
-      if (denylist.some((entry) => lowered.includes(entry.toLowerCase()))) {
-        throw new ConfigError("DATABASE_URL", "points at a production database outside APP_ENV=production");
-      }
+    if (denylist.length === 0) {
+      throw new ConfigError("PRODUCTION_DB_DENYLIST", "is required outside production");
+    }
+    const lowered = url.toLowerCase();
+    if (denylist.some((entry) => lowered.includes(entry.toLowerCase()))) {
+      throw new ConfigError("DATABASE_URL", "points at a production database outside APP_ENV=production");
     }
   }
 
@@ -132,7 +159,13 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
   let ssl: DatabaseConfig["ssl"] = false;
   if (ca) {
     ssl = { ca: normalizePem(ca), rejectUnauthorized: true };
-  } else if (appEnv === "staging" || appEnv === "production" || url.includes("sslmode=") || url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
+  } else if (appEnv === "staging" || appEnv === "production") {
+    if (url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
+      ssl = { rejectUnauthorized: false };
+    } else {
+      throw new ConfigError("DATABASE_CA_CERT", "is required in staging and production (TLS must be verified)");
+    }
+  } else if (url.includes("sslmode=") || url.includes("supabase.co") || url.includes("pooler.supabase.com")) {
     ssl = { rejectUnauthorized: false };
   }
 
@@ -170,10 +203,13 @@ export function getMailConfig(env: Env = process.env): MailConfig {
   const replyTo = optional(env, "NOTIFY_REPLY_TO");
 
   const allowlist = list(env, "MAIL_RECIPIENT_ALLOWLIST");
-  const recipientAllowlist =
-    appEnv === "production" || allowlist.includes("*") || allowlist.length === 0
-      ? null
-      : allowlist;
+  if (appEnv === "production") {
+    if (allowlist.length > 0) {
+      throw new ConfigError("MAIL_RECIPIENT_ALLOWLIST", "must be unset in production");
+    }
+  } else if (allowlist.length === 0) {
+    throw new ConfigError("MAIL_RECIPIENT_ALLOWLIST", "is required outside production");
+  }
 
   let smtp: MailConfig["smtp"];
   if (transport === "smtp") {
@@ -190,8 +226,8 @@ export function getMailConfig(env: Env = process.env): MailConfig {
     if (Boolean(user) !== Boolean(pass)) {
       throw new ConfigError(user ? "SMTP_PASS" : "SMTP_USER", "SMTP_USER and SMTP_PASS must be set together");
     }
-    if (appEnv === "test" && !isLocalHost(host)) {
-      throw new ConfigError("SMTP_HOST", "must be a local mail catcher in test");
+    if ((appEnv === "local" || appEnv === "test") && !isLocalHost(host)) {
+      throw new ConfigError("SMTP_HOST", "must be a local mail catcher in local and test");
     }
     const deployed = appEnv === "staging" || appEnv === "production";
     // Provider submission ports only: 465 (TLS) or 587/2525 (STARTTLS). Port 25 is blocked on
@@ -225,12 +261,29 @@ export function getImageKitConfig(env: Env = process.env): ImageKitConfig | null
   const appEnv = getAppEnv(env);
   const privateKey = optional(env, "IMAGEKIT_PRIVATE_KEY");
   if (!privateKey) {
+    if (appEnv === "staging" || appEnv === "production") {
+      throw new ConfigError("IMAGEKIT_PRIVATE_KEY", "is required in staging and production");
+    }
     return null;
   }
   if (appEnv === "test") {
     throw new ConfigError("IMAGEKIT_PRIVATE_KEY", "must be unset in test");
   }
   return { privateKey, folder: optional(env, "IMAGEKIT_FOLDER") || "/isf_registrations" };
+}
+
+export interface AdminBootstrapConfig {
+  email?: string;
+  password?: string;
+  hash?: string;
+}
+
+export function getAdminBootstrapConfig(env: Env = process.env): AdminBootstrapConfig {
+  return {
+    email: optional(env, "ADMIN_EMAIL")?.toLowerCase(),
+    password: optional(env, "ADMIN_PASSWORD"),
+    hash: optional(env, "ADMIN_PASSWORD_HASH"),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -268,32 +321,19 @@ export function getAuthConfig(env: Env = process.env): AuthConfig {
   const appEnv = getAppEnv(env);
   const deployed = appEnv === "staging" || appEnv === "production";
 
-  const otpPepper = env.OTP_PEPPER?.trim() || "isf_2026_otp_pepper_salt_production_key_32c";
-  const rateLimitKey = env.RATE_LIMIT_HASH_KEY?.trim() || "isf_2026_rate_limit_hash_salt_key_32c";
+  const otpPepper = required(env, "OTP_PEPPER");
+  if (otpPepper.length < MIN_KEY_LENGTH) throw new ConfigError("OTP_PEPPER", `must be at least ${MIN_KEY_LENGTH} characters`);
+  const rateLimitKey = required(env, "RATE_LIMIT_HASH_KEY");
+  if (rateLimitKey.length < MIN_KEY_LENGTH) {
+    throw new ConfigError("RATE_LIMIT_HASH_KEY", `must be at least ${MIN_KEY_LENGTH} characters`);
+  }
+  if (rateLimitKey === otpPepper) throw new ConfigError("RATE_LIMIT_HASH_KEY", "must differ from OTP_PEPPER");
 
-  const allowedOrigins: string[] = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-  ];
-
-  if (env.APP_ORIGIN?.trim()) {
-    allowedOrigins.push(env.APP_ORIGIN.trim().replace(/\/$/, ""));
-  }
-  if (env.VERCEL_URL?.trim()) {
-    allowedOrigins.push(`https://${env.VERCEL_URL.trim().replace(/\/$/, "")}`);
-  }
-  if (env.VERCEL_PROJECT_PRODUCTION_URL?.trim()) {
-    allowedOrigins.push(`https://${env.VERCEL_PROJECT_PRODUCTION_URL.trim().replace(/\/$/, "")}`);
-  }
-  if (env.VERCEL_BRANCH_URL?.trim()) {
-    allowedOrigins.push(`https://${env.VERCEL_BRANCH_URL.trim().replace(/\/$/, "")}`);
-  }
-
+  const allowedOrigins = [origin("APP_ORIGIN", required(env, "APP_ORIGIN"), deployed)];
   const extra = list(env, "APP_EXTRA_ORIGINS");
   if (extra.length > 0) {
-    allowedOrigins.push(...extra.map((v) => v.replace(/\/$/, "")));
+    if (appEnv === "production") throw new ConfigError("APP_EXTRA_ORIGINS", "must be unset in production");
+    allowedOrigins.push(...extra.map((value) => origin("APP_EXTRA_ORIGINS", value, deployed)));
   }
 
   return { otpPepper, rateLimitKey, allowedOrigins };
@@ -313,19 +353,17 @@ export interface BookingConfig {
 /** HOLD_TOKEN_KEYS = "kid:secret[,kid:secret...]"; the first entry signs new tokens. */
 export function getBookingConfig(env: Env = process.env): BookingConfig {
   getAppEnv(env);
-  const raw = env.HOLD_TOKEN_KEYS?.trim() || "k1:isf_hold_token_key_secret_2026_prod_32ch";
-  const entries = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const entries = list(env, "HOLD_TOKEN_KEYS");
+  if (entries.length === 0) throw new ConfigError("HOLD_TOKEN_KEYS", "is required");
   const keys = new Map<string, string>();
   for (const entry of entries) {
     const index = entry.indexOf(":");
     const kid = index > 0 ? entry.slice(0, index) : "";
     const secret = index > 0 ? entry.slice(index + 1) : "";
-    if (/^[a-z0-9]{1,8}$/.test(kid) && secret.length >= MIN_KEY_LENGTH) {
-      keys.set(kid, secret);
-    }
-  }
-  if (keys.size === 0) {
-    keys.set("k1", "isf_hold_token_key_secret_2026_prod_32ch");
+    if (!/^[a-z0-9]{1,8}$/.test(kid)) throw new ConfigError("HOLD_TOKEN_KEYS", "key ids must be 1-8 lower-case letters or digits");
+    if (secret.length < MIN_KEY_LENGTH) throw new ConfigError("HOLD_TOKEN_KEYS", `each secret must be at least ${MIN_KEY_LENGTH} characters`);
+    if (keys.has(kid)) throw new ConfigError("HOLD_TOKEN_KEYS", "key ids must be unique");
+    keys.set(kid, secret);
   }
   return { currentKeyId: [...keys.keys()][0], holdTokenKeys: keys };
 }

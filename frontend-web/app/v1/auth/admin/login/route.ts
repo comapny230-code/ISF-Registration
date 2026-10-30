@@ -1,6 +1,7 @@
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
 import { createSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { getAdminBootstrapConfig } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import {
   assertSameOriginJson,
@@ -26,15 +27,13 @@ export const POST = handler(async (request, { requestId }) => {
   const emailNorm = body.email.toLowerCase().trim();
 
   // 1. Support environment-configured administrator (e.g. set in Vercel settings)
-  const envAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  const envAdminPassword = process.env.ADMIN_PASSWORD?.trim();
-  const envAdminHash = process.env.ADMIN_PASSWORD_HASH?.trim();
+  const envAdmin = getAdminBootstrapConfig();
   const isEnvAdmin =
-    Boolean(envAdminEmail) &&
-    emailNorm === envAdminEmail &&
+    Boolean(envAdmin.email) &&
+    emailNorm === envAdmin.email &&
     Boolean(
-      (envAdminPassword && body.password === envAdminPassword) ||
-      (envAdminHash && verifyPassword(body.password, envAdminHash))
+      (envAdmin.password && body.password === envAdmin.password) ||
+      (envAdmin.hash && verifyPassword(body.password, envAdmin.hash))
     );
 
   let sql: any = null;

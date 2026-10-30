@@ -1,6 +1,5 @@
+import { requireAdmin } from "@/lib/auth/guards";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { getSession } from "@/lib/auth/session";
-import { getDb } from "@/lib/db";
 import {
   assertSameOriginJson,
   handler,
@@ -15,12 +14,12 @@ export const dynamic = "force-dynamic";
 
 export const POST = handler(async (request, { requestId }) => {
   assertSameOriginJson(request);
-  const sql = await getDb();
-
-  const session = await getSession(sql, request, "admin");
-  if (!session) {
-    throw new HttpError(401, "UNAUTHORIZED", "Administrator session is required.");
-  }
+  const { sql, session } = await requireAdmin(request, [
+    "reports.view",
+    "teams.manage",
+    "inventory.manage",
+    "booking.cancel",
+  ]);
 
   const body = strict(await readJsonObject(request), {
     currentPassword: v.string(1, 100),
