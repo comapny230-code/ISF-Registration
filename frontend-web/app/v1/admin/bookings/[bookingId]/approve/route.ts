@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** Admin approves or re-sends official stall booking confirmation pass to the team leader */
 export const POST = handler<{ bookingId: string }>(async (request, { requestId, params }) => {
   assertSameOriginJson(request);
-  const { sql, session } = await requireAdmin(request, ["reports.view", "booking.cancel"]);
+  const { sql, session } = await requireAdmin(request, "booking.cancel");
   const bookingId = v.uuid(params.bookingId, "bookingId");
   await consumeRateLimit(sql, LIMITS.adminWritePerAdmin, session.principalId);
 

@@ -3,6 +3,7 @@ import {
   ConfigError,
   getAppEnv,
   getDatabaseConfig,
+  getFeatureFlags,
   getImageKitConfig,
   getMailConfig,
 } from "@/lib/config";
@@ -140,5 +141,15 @@ describe("CFG-01 ImageKit", () => {
     expectConfigError(() => getImageKitConfig({ ...production, IMAGEKIT_PRIVATE_KEY: undefined }), "IMAGEKIT_PRIVATE_KEY");
     expect(getImageKitConfig(local)).toBeNull();
     expectConfigError(() => getImageKitConfig({ APP_ENV: "test", IMAGEKIT_PRIVATE_KEY: "k" }), "IMAGEKIT_PRIVATE_KEY");
+  });
+});
+
+describe("CFG-02 Feature flags", () => {
+  it("defaults registrationOpen to true in local/test and requires true in production", () => {
+    expect(getFeatureFlags({ APP_ENV: "local" }).registrationOpen).toBe(true);
+    expect(getFeatureFlags({ APP_ENV: "test" }).registrationOpen).toBe(true);
+    expect(getFeatureFlags({ APP_ENV: "production", REGISTRATION_OPEN: "true" }).registrationOpen).toBe(true);
+    expect(getFeatureFlags({ APP_ENV: "production", REGISTRATION_OPEN: undefined }).registrationOpen).toBe(false);
+    expect(getFeatureFlags({ APP_ENV: "production", REGISTRATION_OPEN: "false" }).registrationOpen).toBe(false);
   });
 });

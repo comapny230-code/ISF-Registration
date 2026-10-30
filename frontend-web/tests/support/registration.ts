@@ -81,7 +81,7 @@ export async function submitRegistration(body: Record<string, any>, prepared: Pr
     new Request(`${ORIGIN}/v1/auth/register`, {
       method: "POST",
       headers: headersFor(options, prepared.cookie),
-      body: JSON.stringify({ formToken: issueFormToken(Date.now() - 60_000), ...body, emailCode: options.emailCode ?? prepared.code }),
+      body: JSON.stringify({ formToken: issueFormToken(Date.now() - 60_000), consentAadhaarPan: true, ...body, emailCode: options.emailCode ?? prepared.code }),
     })
   );
   return { status: res.status, headers: res.headers, json: (await res.json()) as Record<string, any> };

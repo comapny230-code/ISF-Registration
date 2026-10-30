@@ -373,8 +373,16 @@ export function getBookingConfig(env: Env = process.env): BookingConfig {
 // static pages still build; booking APIs enforce their own configuration).
 // ---------------------------------------------------------------------------
 
-export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean } {
-  return { bookingUi: env.FEATURE_BOOKING_UI?.trim() !== "false" };
+export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean; registrationOpen: boolean } {
+  const appEnv = env.APP_ENV || (env.VERCEL_ENV === "production" ? "production" : "local");
+  return {
+    bookingUi: env.FEATURE_BOOKING_UI?.trim() !== "false",
+    // In production, REGISTRATION_OPEN must be explicitly "true" (or "1"); in local/test it defaults to open unless explicitly set to "false"
+    registrationOpen:
+      env.REGISTRATION_OPEN?.trim() === "true" ||
+      env.REGISTRATION_OPEN?.trim() === "1" ||
+      (appEnv !== "production" && env.REGISTRATION_OPEN !== "false"),
+  };
 }
 
 // ---------------------------------------------------------------------------

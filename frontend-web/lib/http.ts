@@ -88,7 +88,7 @@ export function handler<P extends Record<string, string> = Record<string, string
           {
             error: {
               code: "DATABASE_UNAVAILABLE",
-              message: "Unable to reach database. Please check DATABASE_URL in Vercel settings.",
+              message: "Database service is currently unavailable. Please try again later.",
               requestId,
             },
           },

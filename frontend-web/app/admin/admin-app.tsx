@@ -13,6 +13,7 @@ import {
 import { ApiError, bookingApi, type SnapshotStall } from "@/lib/booking/client-api";
 import styles from "../book-your-stall/booking.module.css";
 import { formatIst } from "../book-your-stall/components/stall-status";
+import { sanitizeCsvCell } from "@/lib/csv";
 
 type Tab = "dashboard" | "registrations" | "stalls" | "bookings" | "admins" | "audit";
 
@@ -838,7 +839,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
     window.location.assign("/admin/login");
   };
 
-  // Export registrations CSV
+  // Export registrations CSV (safe against Excel/Sheets formula injection)
   const exportRegistrationsCsv = () => {
     if (!registrations || registrations.length === 0) return;
     const headers = [
@@ -858,32 +859,32 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
       "Members Count",
       "Assigned Stall",
       "Booking Reference",
-      "Approval Status",
+      "Status",
       "Registered At",
     ];
 
     const rows = registrations.map((r) => [
-      r.id,
-      r.track,
-      `"${r.teamName.replace(/"/g, '""')}"`,
-      `"${r.leaderName.replace(/"/g, '""')}"`,
-      r.email,
-      r.mobile,
-      r.altMobile || "",
-      `"${r.domain.replace(/"/g, '""')}"`,
-      `"${r.city.replace(/"/g, '""')}"`,
-      `"${r.state.replace(/"/g, '""')}"`,
-      r.country,
-      r.linkedinUrl || "",
-      r.projectReportUrl || "",
-      r.members.length,
-      r.reservation?.stallCode || "",
-      r.reservation?.bookingRef || "",
-      r.approvalStatus,
-      r.createdAt,
+      sanitizeCsvCell(r.id),
+      sanitizeCsvCell(r.track),
+      sanitizeCsvCell(r.teamName),
+      sanitizeCsvCell(r.leaderName),
+      sanitizeCsvCell(r.email),
+      sanitizeCsvCell(r.mobile),
+      sanitizeCsvCell(r.altMobile || ""),
+      sanitizeCsvCell(r.domain),
+      sanitizeCsvCell(r.city),
+      sanitizeCsvCell(r.state),
+      sanitizeCsvCell(r.country),
+      sanitizeCsvCell(r.linkedinUrl || ""),
+      sanitizeCsvCell(r.projectReportUrl || ""),
+      sanitizeCsvCell(r.members.length),
+      sanitizeCsvCell(r.reservation?.stallCode || ""),
+      sanitizeCsvCell(r.reservation?.bookingRef || ""),
+      sanitizeCsvCell(r.approvalStatus === "rejected" ? "Rejected" : "Active"),
+      sanitizeCsvCell(r.createdAt),
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const csvContent = [headers.map(sanitizeCsvCell).join(","), ...rows.map((row) => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1100,7 +1101,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
                   <th>Domain & Location</th>
                   <th>Members</th>
                   <th>Stall</th>
-                  <th>Approval</th>
+                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -1132,7 +1133,13 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
                         <span className="muted small">Not booked</span>
                       )}
                     </td>
-                    <td className={styles.status}>{r.approvalStatus}</td>
+                    <td className={styles.status}>
+                      {r.approvalStatus === "rejected" ? (
+                        <span style={{ color: "#b91c1c", fontWeight: 700 }}>Rejected</span>
+                      ) : (
+                        <span style={{ color: "#059669", fontWeight: 600 }}>Active</span>
+                      )}
+                    </td>
                     <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button
                         type="button"
@@ -1148,29 +1155,46 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
                       >
                         Edit
                       </button>
-                      {r.teamId && can("teams.manage") &&
-                        (["approved", "rejected", "pending"] as const)
-                          .filter((s) => s !== r.approvalStatus)
-                          .map((status) => (
-                            <button
-                              key={status}
-                              type="button"
-                              className={styles.listButton}
-                              onClick={() =>
-                                setAction({
-                                  title: `${status === "approved" ? "Approve" : status === "rejected" ? "Reject" : "Reset"} ${r.teamName}?`,
-                                  description: `Change team booking eligibility to ${status}.`,
-                                  confirmLabel: status === "approved" ? "Approve team" : status === "rejected" ? "Reject team" : "Reset to pending",
-                                  run: async (reason, _force, requestId) => {
-                                    await adminApi.approval(r.teamId!, status, reason, requestId);
-                                    return `${r.teamName}: ${status}.`;
-                                  },
-                                })
-                              }
-                            >
-                              {status === "approved" ? "Approve" : status === "rejected" ? "Reject" : "Reset"}
-                            </button>
-                          ))}
+                      {r.teamId && can("teams.manage") && r.approvalStatus !== "rejected" && (
+                        <button
+                          type="button"
+                          className={styles.listButton}
+                          style={{ color: "#b91c1c" }}
+                          onClick={() =>
+                            setAction({
+                              title: `Reject / block ${r.teamName}?`,
+                              description: `Disables stall booking for this team.`,
+                              confirmLabel: "Reject Team",
+                              run: async (reason, _force, requestId) => {
+                                await adminApi.approval(r.teamId!, "rejected", reason, requestId);
+                                return `${r.teamName}: Rejected.`;
+                              },
+                            })
+                          }
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {r.teamId && can("teams.manage") && r.approvalStatus === "rejected" && (
+                        <button
+                          type="button"
+                          className={styles.listButton}
+                          style={{ color: "#059669" }}
+                          onClick={() =>
+                            setAction({
+                              title: `Unblock ${r.teamName}?`,
+                              description: `Restores team booking eligibility.`,
+                              confirmLabel: "Unblock Team",
+                              run: async (reason, _force, requestId) => {
+                                await adminApi.approval(r.teamId!, "approved", reason, requestId);
+                                return `${r.teamName}: Restored.`;
+                              },
+                            })
+                          }
+                        >
+                          Unblock
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={styles.listButton}
@@ -1403,14 +1427,14 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
                     </td>
                     <td className={styles.status}>{b.status}</td>
                     <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {b.status === "confirmed" && (
+                      {b.status === "confirmed" && can("booking.cancel") && (
                         <button
                           type="button"
                           className={styles.listButton}
                           style={{ color: "#047857", borderColor: "#a7f3d0" }}
                           onClick={() =>
                             setAction({
-                              title: `Approve & email stall pass for ${b.bookingRef}?`,
+                              title: `Email stall pass for ${b.bookingRef}?`,
                               description: `Dispatches the official stall booking confirmation pass to ${b.leaderEmail}.`,
                               confirmLabel: "Send Booking Pass",
                               run: async () => {
@@ -1420,7 +1444,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
                             })
                           }
                         >
-                          Approve &amp; Email Pass
+                          Email Pass
                         </button>
                       )}
                       {b.status === "confirmed" && can("booking.cancel") && (

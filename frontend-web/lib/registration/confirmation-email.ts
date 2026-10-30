@@ -103,13 +103,18 @@ export function buildConfirmationEmail(input: RegistrationInput): { subject: str
       ${membersHtml}
 
       <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:18px;margin:20px 0;">
-        <h4 style="margin:0 0 8px;color:#15803d;font-size:14.5px;font-weight:700;">📋 What Happens Next?</h4>
-        <ul style="margin:0;padding-left:18px;color:#166534;font-size:13px;line-height:1.6;">
-          <li><strong>Application Under Review:</strong> Your team details and project credentials have been recorded in the summit database.</li>
-          <li><strong>Organizer Approval:</strong> The ISF Summit Committee will review and approve your registration.</li>
-          <li><strong>Approval Email:</strong> Once approved, an official approval notification will be sent to this email address.</li>
-          <li><strong>Stall Booking (1 Stall Per Team):</strong> After approval, you can sign in with your registered email via one-time passcode (OTP) to choose your 10 ft × 10 ft exhibition stall on the interactive venue map.</li>
-        </ul>
+        <h4 style="margin:0 0 8px;color:#15803d;font-size:14.5px;font-weight:700;">🎪 Next Step: Book Your Exhibition Stall</h4>
+        <p style="margin:0 0 10px;color:#166534;font-size:13px;line-height:1.6;">
+          Your team registration is confirmed! You can now proceed directly to choose and reserve your 10 ft × 10 ft exhibition stall on the interactive venue map.
+        </p>
+        <div style="text-align:center;margin:14px 0 6px;">
+          <a href="https://startupjathara.com/book-your-stall" style="display:inline-block;background:#059669;color:#ffffff;font-size:14px;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;">
+            Book Your Stall Now ↗
+          </a>
+        </div>
+        <div style="font-size:12px;color:#15803d;margin-top:8px;text-align:center;">
+          Sign in with your registered email via one-time passcode (OTP) to select your stall. Each registered team is eligible for 1 stall.
+        </div>
       </div>
 
       <p style="color:#94a3b8;font-size:11px;margin:0;border-top:1px solid #f1f5f9;padding-top:14px;text-align:center;">

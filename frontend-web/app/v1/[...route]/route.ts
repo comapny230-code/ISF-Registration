@@ -310,6 +310,17 @@ async function handleRequest(request: Request) {
   // POST /v1/auth/register or /v1/public/signup
   if ((path.includes("/auth/register") || path.includes("/public/signup")) && method === "POST") {
     try {
+      const flags = getFeatureFlags();
+      if (!flags.registrationOpen) {
+        return Response.json(
+          {
+            code: "REGISTRATION_PAUSED",
+            message: "Summit registration is currently paused. Please check back soon or contact summit support.",
+          },
+          { status: 403 }
+        );
+      }
+
       let body: any;
       try {
         body = JSON.parse(await readLimitedText(request));
@@ -326,7 +337,8 @@ async function handleRequest(request: Request) {
       await checkCaptcha(body.captchaToken, clientAddress(request));
 
       // Explicit voluntary consent for Aadhaar & PAN verification under DPDP Act / UIDAI compliance
-      if (body.consentAadhaarPan === false) {
+      // A request that leaves consent out or does not explicitly set it to true is refused.
+      if (body.consentAadhaarPan !== true) {
         return Response.json(
           {
             code: "CONSENT_REQUIRED",
