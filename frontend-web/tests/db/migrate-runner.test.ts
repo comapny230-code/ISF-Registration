@@ -86,11 +86,11 @@ describe("migration runner", () => {
   it("applies every migration once, records checksums, and is a no-op the second time", async () => {
     const first = migrate(["apply", "--target", "test"]);
     expect(first.code, first.out).toBe(0);
-    expect(first.out.match(/^applied /gm)).toHaveLength(13);
+    expect(first.out.match(/^applied /gm)).toHaveLength(15);
     const second = migrate(["apply", "--target", "test"]);
     expect(second.out).toMatch(/nothing to apply/);
     const rows = await withDb((sql) => sql`select version, applied_by, length(sha256) as len from public.schema_migrations order by version`);
-    expect(rows.map((r) => r.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011", "0012", "0013"]);
+    expect(rows.map((r) => r.version)).toEqual(["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015"]);
     expect(rows.every((r) => r.applied_by === "vitest" && r.len === 64)).toBe(true);
     expect(migrate(["status", "--target", "test"]).out).not.toMatch(/pending|CHANGED/);
   });

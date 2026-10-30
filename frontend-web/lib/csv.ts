@@ -8,3 +8,6 @@ export function csvCell(value: unknown): string {
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
+
+/** Same as csvCell (name used on main, 2026-10-30). */
+export const sanitizeCsvCell = csvCell;

@@ -3,6 +3,7 @@ import {
   ConfigError,
   getAppEnv,
   getDatabaseConfig,
+  getFeatureFlags,
   getImageKitConfig,
   getMailConfig,
 } from "@/lib/config";
@@ -140,5 +141,18 @@ describe("CFG-01 ImageKit", () => {
     expectConfigError(() => getImageKitConfig({ ...production, IMAGEKIT_PRIVATE_KEY: undefined }), "IMAGEKIT_PRIVATE_KEY");
     expect(getImageKitConfig(local)).toBeNull();
     expectConfigError(() => getImageKitConfig({ APP_ENV: "test", IMAGEKIT_PRIVATE_KEY: "k" }), "IMAGEKIT_PRIVATE_KEY");
+  });
+});
+
+describe("CFG-02 Feature flags", () => {
+  // Fail-closed in every environment: a missing or mistyped setting pauses registration (the test
+  // suites set REGISTRATION_OPEN=true explicitly). Production behaves as on main.
+  it("opens registration only when REGISTRATION_OPEN is exactly true, in every environment", () => {
+    expect(getFeatureFlags({ APP_ENV: "local" }).registrationOpen).toBe(false);
+    expect(getFeatureFlags({ APP_ENV: "test" }).registrationOpen).toBe(false);
+    expect(getFeatureFlags({ APP_ENV: "local", REGISTRATION_OPEN: "true" }).registrationOpen).toBe(true);
+    expect(getFeatureFlags({ APP_ENV: "production", REGISTRATION_OPEN: "true" }).registrationOpen).toBe(true);
+    expect(getFeatureFlags({ APP_ENV: "production", REGISTRATION_OPEN: undefined }).registrationOpen).toBe(false);
+    expect(getFeatureFlags({ APP_ENV: "production", REGISTRATION_OPEN: "false" }).registrationOpen).toBe(false);
   });
 });

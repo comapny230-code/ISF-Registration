@@ -156,4 +156,21 @@ describe("REG-VERIFY bot filters", () => {
     expect((await submitRegistration({ ...body, formToken: null }, prepared)).status).toBe(400);
     expect(await leaderRows(body.email)).toBe(0);
   });
+
+  it("refuses a registration that explicitly denies consent", async () => {
+    const body = payload({ consentAadhaarPan: false });
+    const res = await registerVerified(body);
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe("CONSENT_REQUIRED");
+    expect(await leaderRows(body.email)).toBe(0);
+  });
+
+  it("refuses a registration that leaves consent out", async () => {
+    const body = payload({ consentAadhaarPan: undefined });
+    const res = await registerVerified(body);
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe("CONSENT_REQUIRED");
+    expect(await leaderRows(body.email)).toBe(0);
+  });
 });
+
