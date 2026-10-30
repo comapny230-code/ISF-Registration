@@ -611,23 +611,9 @@ on conflict (edition_id, code) do update set
   landmarks = excluded.landmarks,
   inventory_status = 'approved';
 
--- Admin users for /admin portal
+-- Admin users for /admin portal. No administrator is seeded; create one with
+-- ADMIN_BOOTSTRAP_PASSWORD=... npm run db:create-admin -- <email> (frontend-web/scripts/create-admin.mts)
 alter table if exists app_auth.admin_users add column if not exists password_hash text;
-
--- Remove all other admin credentials
-
--- Primary administrator. No password is seeded: the administrator sets one with the
--- emailed reset code on the admin sign-in page. An existing row is never changed.
-insert into app_auth.admin_users (email, display_name, created_by)
-values ('akshatrajpati@gmail.com', 'Akshat Rajpati', 'schema-init')
-on conflict (email) do nothing;
-
-insert into app_auth.admin_grants (admin_user_id, permission, granted_by)
-select id, p.perm, 'schema-init'
-  from app_auth.admin_users
- cross join (values ('booking.cancel'), ('inventory.manage'), ('teams.manage'), ('reports.view')) as p(perm)
- where email = 'akshatrajpati@gmail.com'
-on conflict do nothing;
 
 -- Stalls from PDF layout: 48 in Playground GIET University, 50 in Basketball Ground
 -- PG-A01 to PG-A30 (Top horizontal run of 30 stalls)

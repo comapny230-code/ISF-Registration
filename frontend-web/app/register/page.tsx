@@ -1981,7 +1981,7 @@ export default function RegisterPage() {
                           className="input-text-ctrl"
                           type="text"
                           required
-                          placeholder="e.g. Akshat Rajpati"
+                          placeholder="e.g. Rahul Sharma"
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
                         />
