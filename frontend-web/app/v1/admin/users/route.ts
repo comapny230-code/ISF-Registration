@@ -41,8 +41,16 @@ export const POST = handler(async (request, { requestId }) => {
   const body = strict(await readJsonObject(request), {
     email: v.email,
     displayName: v.string(2, 100),
-    password: v.string(8, 100),
+    password: v.string(12, 100),
   });
+
+  // A new administrator gets every permission, so only an administrator who already holds
+  // every permission may create one (no escalation from a partial grant).
+  const [held] = await sql`
+    select count(distinct permission)::int as n from app_auth.admin_grants
+     where admin_user_id = ${session.principalId} and revoked_at is null
+       and permission in ('booking.cancel', 'inventory.manage', 'teams.manage', 'reports.view')`;
+  if (held.n < 4) throw new HttpError(403, "FORBIDDEN", "Only an administrator with every permission can add administrators.");
 
   const emailNorm = body.email.toLowerCase().trim();
 

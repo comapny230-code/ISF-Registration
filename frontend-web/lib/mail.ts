@@ -20,7 +20,7 @@ function isAllowed(recipient: string, allowlist: string[]): boolean {
   const address = recipient.trim().toLowerCase();
   return allowlist.some((entry) => {
     const rule = entry.toLowerCase();
-    return rule === "*" || (rule.startsWith("@") ? address.endsWith(rule) : address === rule);
+    return rule.startsWith("@") ? address.endsWith(rule) : address === rule;
   });
 }
 

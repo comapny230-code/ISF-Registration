@@ -134,7 +134,7 @@ function ActionDialog({ action, adminEmail, onDone }: { action: Action; adminEma
             </div>
           </>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div data-testid="reauth" style={{ display: "grid", gap: 12 }}>
             <div className="notice notice-warn small">
               This action requires step-up authentication. A code will be emailed to <strong>{adminEmail}</strong>.
             </div>
@@ -186,7 +186,7 @@ function ChangePasswordDialog({ onDone }: { onDone: (message: string | null) => 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 6) return setError("New password must be at least 6 characters.");
+    if (newPassword.length < 12) return setError("New password must be at least 12 characters.");
     if (newPassword !== confirmPassword) return setError("New passwords do not match.");
     setBusy(true);
     setError(null);
@@ -221,18 +221,18 @@ function ChangePasswordDialog({ onDone }: { onDone: (message: string | null) => 
             <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
           </label>
           <label>
-            New Password (min 6 characters)
-            <input type="password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            New Password (min 12 characters)
+            <input type="password" required minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </label>
           <label>
             Confirm New Password
-            <input type="password" required minLength={6} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            <input type="password" required minLength={12} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
           </label>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <button className="btn" type="button" disabled={busy} onClick={() => onDone(null)}>
               Cancel
             </button>
-            <button className="btn btn-primary" type="submit" disabled={busy || !currentPassword || newPassword.length < 6}>
+            <button className="btn btn-primary" type="submit" disabled={busy || !currentPassword || newPassword.length < 12}>
               {busy ? "Saving…" : "Save Password"}
             </button>
           </div>
@@ -251,7 +251,7 @@ function CreateAdminDialog({ onDone }: { onDone: (message: string | null) => voi
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (password.length < 12) return setError("Password must be at least 12 characters.");
     setBusy(true);
     setError(null);
     try {
@@ -297,11 +297,11 @@ function CreateAdminDialog({ onDone }: { onDone: (message: string | null) => voi
             />
           </label>
           <label>
-            Password (min 8 characters)
+            Password (min 12 characters)
             <input
               type="password"
               required
-              minLength={8}
+              minLength={12}
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -311,7 +311,7 @@ function CreateAdminDialog({ onDone }: { onDone: (message: string | null) => voi
             <button className="btn" type="button" disabled={busy} onClick={() => onDone(null)}>
               Cancel
             </button>
-            <button className="btn btn-primary" type="submit" disabled={busy || !email || !displayName || password.length < 8}>
+            <button className="btn btn-primary" type="submit" disabled={busy || !email || !displayName || password.length < 12}>
               {busy ? "Creating…" : "Create Administrator"}
             </button>
           </div>
@@ -1106,7 +1106,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
               </thead>
               <tbody>
                 {filteredRegs.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} data-team-name={r.teamName}>
                     <td>
                       <strong style={{ fontSize: "0.95rem" }}>{r.teamName}</strong>
                       <div className="muted small">{r.track === "senior" ? "Senior Startup" : "Junior Innovator"}</div>
@@ -1393,7 +1393,7 @@ export function AdminApp({ displayName, adminEmail, permissions }: { displayName
               </thead>
               <tbody>
                 {(bookings.items ?? []).map((b) => (
-                  <tr key={b.bookingId}>
+                  <tr key={b.bookingId} data-booking-ref={b.bookingRef}>
                     <td className={styles.code}>{b.bookingRef}</td>
                     <td>{b.stallCode}</td>
                     <td>{b.teamName}</td>

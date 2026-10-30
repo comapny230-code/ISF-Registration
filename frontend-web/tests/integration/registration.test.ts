@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as route from "@/app/v1/[...route]/route";
 import { closeDb, getDb } from "@/lib/db";
 import { capturedMailForTests } from "@/lib/mail";
-import { nextAadhaar, prepareRegistration, registerVerified, requestRegistrationCode, submitRegistration } from "../support/registration";
+import { nextAadhaar, prepareRegistration, registerVerified, requestRegistrationCode, submitRegistration, nextMobile } from "../support/registration";
 
 let counter = 0;
 const PHOTO = "https://ik.imagekit.io/test/photo.jpg";
@@ -19,7 +19,7 @@ function payload(overrides: Record<string, unknown> = {}) {
     fullName: `Leader ${counter}`,
     email: `leader${counter}@example.test`,
     photoUrl: PHOTO,
-    mobile: "9876543210",
+    mobile: nextMobile(),
     altMobile: "9876543211",
     domain: "Agritech & Food Safety",
     projectDetails: "A project description.",

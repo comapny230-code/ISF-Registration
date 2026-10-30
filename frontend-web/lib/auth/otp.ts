@@ -53,14 +53,11 @@ export async function findPrincipal(sql: postgres.ISql, audience: Audience, emai
   const rows =
     audience === "leader"
       ? await sql`
-          select coalesce(u.id, l.user_id, s.user_id) as id,
-                 coalesce(u.full_name, l.full_name, s.full_name, 'Team Leader') as display_name
-            from (select 1) as dummy
-            left join public.user_accounts u on lower(u.email) = ${emailNorm}
-            left join public.startup_team_leaders l on (l.user_id = u.id or lower(l.email) = ${emailNorm})
-            left join public.student_innovators s on (s.user_id = u.id or lower(s.email) = ${emailNorm})
-           where (u.id is not null or l.id is not null or s.id is not null)
-           limit 1`
+          select u.id, u.full_name as display_name
+            from public.user_accounts u
+           where lower(u.email) = ${emailNorm} and u.status = 'active'
+             and (exists (select 1 from public.startup_team_leaders l where l.user_id = u.id and l.edition_id = ${EDITION_ID})
+               or exists (select 1 from public.student_innovators s where s.user_id = u.id and s.edition_id = ${EDITION_ID}))`
       : await sql`
           select a.id, a.display_name
             from app_auth.admin_users a

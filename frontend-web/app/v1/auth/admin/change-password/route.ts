@@ -24,7 +24,7 @@ export const POST = handler(async (request, { requestId }) => {
 
   const body = strict(await readJsonObject(request), {
     currentPassword: v.string(1, 100),
-    newPassword: v.string(6, 100),
+    newPassword: v.string(12, 100),
   });
 
   const [admin] = await sql`

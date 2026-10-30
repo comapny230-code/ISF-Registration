@@ -8,7 +8,7 @@ import { getFeatureFlags } from "@/lib/config";
 import { getDb } from "@/lib/db";
 import { capturedMailForTests } from "@/lib/mail";
 import * as formTokenRoute from "@/app/v1/auth/register/form-token/route";
-import { nextAadhaar, registerVerified, requestRegistrationCode, submitRegistration } from "../support/registration";
+import { nextAadhaar, registerVerified, requestRegistrationCode, submitRegistration, nextMobile } from "../support/registration";
 
 const PHOTO = "https://ik.imagekit.io/test/photo.jpg";
 let n = 0;
@@ -20,7 +20,7 @@ function payload(): Record<string, any> {
     fullName: `Pause Leader ${n}`,
     email: `pause${n}@example.test`,
     photoUrl: PHOTO,
-    mobile: "9876543210",
+    mobile: nextMobile(),
     altMobile: "9876543211",
     domain: "Agritech",
     projectDetails: "Details",

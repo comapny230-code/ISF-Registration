@@ -17,6 +17,9 @@ const UNAUTHENTICATED_BY_DESIGN = new Map<string, string>([
   ["auth/register/email-code/route.ts", "registration step: emails a code to the address being registered"],
   ["auth/register/form-token/route.ts", "registration step: signed form timestamp, no data"],
   ["health/route.ts", "uptime check: database reachable or not, nothing else"],
+  ["auth/admin/login/route.ts", "admin password sign-in: active admin with a live grant only"],
+  ["auth/admin/reset-password/route.ts", "admin password reset by emailed code; same reply whether or not the admin exists"],
+  ["auth/admin/change-password/route.ts", "authorises inline: admin session plus the current password"],
   ["booking/stalls/route.ts", "authorises inline: leader or admin session, or organiser-enabled public map (E5)"],
 ]);
 

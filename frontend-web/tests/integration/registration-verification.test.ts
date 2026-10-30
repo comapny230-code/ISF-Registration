@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 import { capturedMailForTests } from "@/lib/mail";
 import { configureBooking, me } from "../support/booking";
 import { cookiePair } from "../support/http";
-import { nextAadhaar, prepareRegistration, registerVerified, requestRegistrationCode, submitRegistration } from "../support/registration";
+import { nextAadhaar, prepareRegistration, registerVerified, requestRegistrationCode, submitRegistration, nextMobile } from "../support/registration";
 
 let n = 0;
 const PHOTO = "https://ik.imagekit.io/test/photo.jpg";
@@ -19,7 +19,7 @@ function payload(overrides: Record<string, unknown> = {}): Record<string, any> {
     fullName: `Verify Leader ${n}`,
     email: `verify${n}@example.test`,
     photoUrl: PHOTO,
-    mobile: "9876543210",
+    mobile: nextMobile(),
     altMobile: "9876543211",
     domain: "Agritech",
     projectDetails: "Details",

@@ -54,7 +54,7 @@ export const POST = handler(async (request, { requestId }) => {
     await sendLoginCodeEmail(emailNorm, code, "admin");
 
     return json(
-      { ok: true, message: `A 6-digit password reset code has been sent to ${emailNorm}.` },
+      { ok: true, message: "If an administrator account exists for this address, a reset code has been sent." },
       200,
       requestId,
       [["Set-Cookie", otpBindingCookie(binding)]]
@@ -66,7 +66,7 @@ export const POST = handler(async (request, { requestId }) => {
       action: v.string(1, 20),
       email: v.email,
       code: v.pattern(/^\d{6}$/),
-      newPassword: v.string(6, 100),
+      newPassword: v.string(12, 100),
     });
     const emailNorm = body.email.toLowerCase().trim();
     const binding = otpBindingFrom(request);

@@ -85,3 +85,24 @@ Beyond LG-01..LG-14. "Fixed" means done and tested locally; nothing is deployed.
 | A-08 | `nodemailer` advisory (moderate) | Medium | Mitigated in code; upgrade to ≥ 10.2.1 on or after 2026-11-05 (release-age rule) |
 | A-09 | Supabase performance advisor: 7 unindexed foreign keys, 6 unused indexes | Info | No action for tables this size |
 | A-10 | Supabase Storage and Auth unused (0 buckets, 0 users) | Info | Nothing exposed there |
+
+## Review of the 2026-10-29/30 direct pushes (8b07c34) — 2026-10-30
+
+Eight commits were pushed straight to `main` and `feature/book-your-stall` (booking app now live). Merged locally in `7ad3cc7`; fixes below are local and **not pushed**.
+
+| # | Finding | Severity | Status |
+|---|---|---|---|
+| B-01 | **Live database wiped**: 0 accounts/leaders/students (was 5); per-table stats show the tables were dropped and recreated, matching `database/reset_database.sql` | Critical | **[OWNER]** restore from Supabase backups. Script now refuses to run without `set isf.confirm_reset = 'DELETE-ALL-DATA'` (test DB-RESET) |
+| B-02 | Primary admin's **password in plain text** (SQL comment) plus its hash, committed to GitHub | Critical | Removed from both SQL files; no password is seeded any more. **[OWNER]** change that admin password now — it stays in git history |
+| B-03 | Built-in fallback values for `OTP_PEPPER`, `RATE_LIMIT_HASH_KEY`, `HOLD_TOKEN_KEYS` (published keys → forgeable hold tokens) | High | Reverted: the app refuses to start without them (test CFG-SECRETS) |
+| B-04 | Same-origin check let through requests with no Origin, from any `*.vercel.app` site, and from localhost in production | High | Reverted to strict; the deployment's own address (e.g. a Vercel preview URL) is still accepted (tests AUTH-07b) |
+| B-05 | Database TLS without certificate verification; required settings made optional (`APP_ENV`, CA, allowlist) | High | Reverted to the startup checks |
+| B-06 | Leader sign-in no longer required an active account or a leader registration (members could get codes) | High | Reverted |
+| B-07 | Stall status API made public and returned 98 invented "available" stalls when the database failed | Medium | Reverted: real data only; anonymous viewing only when organisers enable `public_map` |
+| B-08 | Any admin could create a full admin; 6-character admin passwords; reset reply revealed whether an admin exists | Medium | Creating admins needs every permission; 12-character minimum; uniform reply |
+| B-09 | Seed SQL marks all zones and stalls `approved`; live DB has 15 approved, bookable stalls | High | Seeds now `provisional`. **[ORG]** live stalls stay bookable until approved or set back to provisional |
+| B-10 | New columns (consent, admin password) existed only through runtime DDL | Medium | Migration `0010_admin_passwords_and_id_consent.sql`; `isf_app` grants updated |
+
+Kept from the collaborator: DPDP consent checkbox, no-overwrite rules (email, Aadhaar, PAN, primary phone; a team member's address can no longer register as a leader), admin tabs and CRUD, password sign-in for admins, public booking page with sign-in dialog, booking page on by default.
+
+Verification (merged + fixed tree): typecheck OK; Vitest 335/335; `next build` OK; Playwright 21/21.

@@ -1,8 +1,16 @@
 -- ============================================================================
 -- ISF · STARTUP JATHARA 2026 — COMPLETE CLEAN DATABASE RESET SCRIPT
--- Run this in your Supabase SQL Editor to wipe test data and recreate
--- the pristine production database schema.
+-- DESTROYS ALL DATA (registrations, accounts, bookings). Never run it against the live
+-- project. It refuses to run unless you first run, in the same session:
+--   set isf.confirm_reset = 'DELETE-ALL-DATA';
 -- ============================================================================
+
+do $$
+begin
+  if current_setting('isf.confirm_reset', true) is distinct from 'DELETE-ALL-DATA' then
+    raise exception 'reset_database.sql refused: set isf.confirm_reset first (this deletes all data)';
+  end if;
+end $$;
 
 drop schema if exists booking cascade;
 drop schema if exists app_auth cascade;
@@ -622,8 +630,8 @@ on conflict (edition_id) do update set
 -- Base Event Zones with exact landmarks from PDF layout
 insert into booking.zones (edition_id, code, name, extent_width_ft, extent_depth_ft, landmarks, inventory_status, source_ref)
 values
-  (2026, 'PG', 'Playground GIET University', 338, 402, '[{"label":"67 FT Stage","kind":"stage","x":2,"y":180,"w":14,"d":67},{"label":"FIELD ENTRY","kind":"entry","x":0,"y":250,"w":20,"d":15},{"label":"135 FT OPEN SPACE TOWARDS AGRICULTURE LAND","kind":"open_space","x":2,"y":270,"w":35,"d":125},{"label":"HELIPAD","kind":"restricted","x":220,"y":305,"w":105,"d":85}]'::jsonb, 'approved', 'master'),
-  (2026, 'BB', 'Rang Manch / Basketball Ground', 101, 305, '[{"label":"RANG MANCH (101 FT)","kind":"stage","x":25,"y":0,"w":51,"d":18},{"label":"MECHANICAL ROAD 305 FT","kind":"road","x":2,"y":15,"w":10,"d":260},{"label":"ENTRY","kind":"entry","x":44,"y":18,"w":4,"d":260},{"label":"EXIT","kind":"exit","x":53,"y":18,"w":4,"d":260},{"label":"ISF STALL","kind":"reserved","x":12,"y":265,"w":30,"d":18},{"label":"MEETING ROOM","kind":"reserved","x":52,"y":265,"w":45,"d":18},{"label":"BUS-STAND ROAD 101 FT","kind":"road","x":0,"y":286,"w":101,"d":19}]'::jsonb, 'approved', 'master')
+  (2026, 'PG', 'Playground GIET University', 338, 402, '[{"label":"67 FT Stage","kind":"stage","x":2,"y":180,"w":14,"d":67},{"label":"FIELD ENTRY","kind":"entry","x":0,"y":250,"w":20,"d":15},{"label":"135 FT OPEN SPACE TOWARDS AGRICULTURE LAND","kind":"open_space","x":2,"y":270,"w":35,"d":125},{"label":"HELIPAD","kind":"restricted","x":220,"y":305,"w":105,"d":85}]'::jsonb, 'provisional', 'master'),
+  (2026, 'BB', 'Rang Manch / Basketball Ground', 101, 305, '[{"label":"RANG MANCH (101 FT)","kind":"stage","x":25,"y":0,"w":51,"d":18},{"label":"MECHANICAL ROAD 305 FT","kind":"road","x":2,"y":15,"w":10,"d":260},{"label":"ENTRY","kind":"entry","x":44,"y":18,"w":4,"d":260},{"label":"EXIT","kind":"exit","x":53,"y":18,"w":4,"d":260},{"label":"ISF STALL","kind":"reserved","x":12,"y":265,"w":30,"d":18},{"label":"MEETING ROOM","kind":"reserved","x":52,"y":265,"w":45,"d":18},{"label":"BUS-STAND ROAD 101 FT","kind":"road","x":0,"y":286,"w":101,"d":19}]'::jsonb, 'provisional', 'master')
 on conflict (edition_id, code) do update set
   name = excluded.name,
   extent_width_ft = excluded.extent_width_ft,
@@ -635,20 +643,12 @@ on conflict (edition_id, code) do update set
 alter table if exists app_auth.admin_users add column if not exists password_hash text;
 
 -- Remove all other admin credentials
-delete from app_auth.admin_grants where admin_user_id in (select id from app_auth.admin_users where email <> 'akshatrajpati@gmail.com');
-delete from app_auth.admin_users where email <> 'akshatrajpati@gmail.com';
 
--- Primary Administrator: akshatrajpati@gmail.com / Akshyat@12345
-insert into app_auth.admin_users (email, display_name, password_hash, created_by)
-values (
-  'akshatrajpati@gmail.com',
-  'Akshat Rajpati',
-  'a1b2c3d4e5f60718293a4b5c6d7e8f90:d22db98c8f02f2825958390c7d255355f0ec72e0b3f62fad13f0ef915e9c0a7451fb1936184364589f62f76d6ac351176727984950f7aa8f58fccd69b5b25074',
-  'schema-init'
-)
-on conflict (email) do update set
-  password_hash = excluded.password_hash,
-  display_name = excluded.display_name;
+-- Primary administrator. No password is seeded: the administrator sets one with the
+-- emailed reset code on the admin sign-in page. An existing row is never changed.
+insert into app_auth.admin_users (email, display_name, created_by)
+values ('akshatrajpati@gmail.com', 'Akshat Rajpati', 'schema-init')
+on conflict (email) do nothing;
 
 insert into app_auth.admin_grants (admin_user_id, permission, granted_by)
 select id, p.perm, 'schema-init'
@@ -660,28 +660,28 @@ on conflict do nothing;
 -- Stalls from PDF layout: 48 in Playground GIET University, 50 in Basketball Ground
 -- PG-A01 to PG-A30 (Top horizontal run of 30 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, 'PG-A' || to_char(i, 'FM00'), 10, 10, 16 + (i - 1) * 10, 0, 0, 'approved', 'pdf-map'
+select 2026, z.id, 'PG-A' || to_char(i, 'FM00'), 10, 10, 16 + (i - 1) * 10, 0, 0, 'provisional', 'pdf-map'
 from booking.zones z, generate_series(1, 30) as i
 where z.code = 'PG' and z.edition_id = 2026
 on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
 
 -- PG-B01 to PG-B18 (Left vertical run of 18 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, 'PG-B' || to_char(i, 'FM00'), 10, 10, 6, (i - 1) * 10, 0, 'approved', 'pdf-map'
+select 2026, z.id, 'PG-B' || to_char(i, 'FM00'), 10, 10, 6, (i - 1) * 10, 0, 'provisional', 'pdf-map'
 from booking.zones z, generate_series(1, 18) as i
 where z.code = 'PG' and z.edition_id = 2026
 on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
 
 -- BB-A01 to BB-A25 (Left vertical run of 25 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, 'BB-A' || to_char(i, 'FM00'), 10, 10, 16, 12 + (i - 1) * 10, 0, 'approved', 'pdf-map'
+select 2026, z.id, 'BB-A' || to_char(i, 'FM00'), 10, 10, 16, 12 + (i - 1) * 10, 0, 'provisional', 'pdf-map'
 from booking.zones z, generate_series(1, 25) as i
 where z.code = 'BB' and z.edition_id = 2026
 on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';
 
 -- BB-B01 to BB-B25 (Right vertical run of 25 stalls)
 insert into booking.stalls (edition_id, zone_id, code, width_ft, depth_ft, x_ft, y_ft, rotation_deg, inventory_status, source_ref)
-select 2026, z.id, 'BB-B' || to_char(i, 'FM00'), 10, 10, 72, 12 + (i - 1) * 10, 0, 'approved', 'pdf-map'
+select 2026, z.id, 'BB-B' || to_char(i, 'FM00'), 10, 10, 72, 12 + (i - 1) * 10, 0, 'provisional', 'pdf-map'
 from booking.zones z, generate_series(1, 25) as i
 where z.code = 'BB' and z.edition_id = 2026
 on conflict (edition_id, code) do update set x_ft = excluded.x_ft, y_ft = excluded.y_ft, inventory_status = 'approved';

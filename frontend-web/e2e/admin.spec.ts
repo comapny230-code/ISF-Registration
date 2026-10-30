@@ -39,26 +39,28 @@ test("E2E-08: cancel a booking, disable a stall and approve a team, each with a 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Stall booking administration" })).toBeVisible();
 
+  await page.getByRole("tab", { name: "Bookings" }).click();
   const row = page.locator(`tr[data-booking-ref="${booking.bookingRef}"]`);
   await row.getByRole("button", { name: "Cancel" }).click();
   const dialog = page.getByRole("dialog", { name: `Cancel booking ${booking.bookingRef}?` });
   await expect(dialog.getByRole("button", { name: "Cancel booking" })).toBeDisabled(); // reason required
-  await dialog.getByLabel("Reason (recorded in the audit log)").fill(REASON);
+  await dialog.getByLabel(/Mandatory reason for audit/).fill(REASON);
   await dialog.getByRole("button", { name: "Cancel booking" }).click();
   await expect(page.getByTestId("admin-notice")).toContainText(`Booking ${booking.bookingRef} cancelled.`);
-  await expect(row).toContainText(`Cancelled: ${REASON}`);
+  // The bookings table shows the status; the reason is checked in the audit log below.
+  await expect(row).toContainText("cancelled");
 
   await page.getByRole("tab", { name: "Stalls" }).click();
   const stallRow = page.locator(`tr[data-stall-code="${second.code}"]`);
   await stallRow.getByRole("button", { name: "Disable" }).click();
-  await page.getByRole("dialog").getByLabel("Reason (recorded in the audit log)").fill(REASON);
+  await page.getByRole("dialog").getByLabel(/Mandatory reason for audit/).fill(REASON);
   await page.getByRole("dialog").getByRole("button", { name: "Disable stall" }).click();
   await expect(stallRow).toContainText("unavailable");
 
-  await page.getByRole("tab", { name: "Teams" }).click();
+  await page.getByRole("tab", { name: "Registrations" }).click();
   const teamRow = page.locator(`tr[data-team-name="${pending.teamName}"]`);
   await teamRow.getByRole("button", { name: "Approve" }).click();
-  await page.getByRole("dialog").getByLabel("Reason (recorded in the audit log)").fill(REASON);
+  await page.getByRole("dialog").getByLabel(/Mandatory reason for audit/).fill(REASON);
   await page.getByRole("dialog").getByRole("button", { name: "Approve team" }).click();
   await expect(teamRow).toContainText("approved");
 
@@ -84,18 +86,19 @@ test("E2E-08: a stale sign-in triggers step-up inside the dialog and the action 
   await s`update app_auth.sessions set reauth_at = clock_timestamp() - interval '11 minutes' where admin_user_id = ${admin.id}`;
 
   await page.goto("/admin");
+  await page.getByRole("tab", { name: "Stalls" }).click();
   const stallRow = page.locator(`tr[data-stall-code="${stall.code}"]`);
   await stallRow.getByRole("button", { name: "Disable" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Reason (recorded in the audit log)").fill(REASON);
+  await dialog.getByLabel(/Mandatory reason for audit/).fill(REASON);
   await dialog.getByRole("button", { name: "Disable stall" }).click();
 
   await expect(dialog.getByTestId("reauth")).toBeVisible();
-  await dialog.getByRole("button", { name: `Send a code to ${admin.email}` }).click();
+  await dialog.getByRole("button", { name: "Send confirmation code" }).click();
   await expect(dialog.getByLabel("6-digit code")).toBeVisible();
   await plantAdminCode(admin.email, "864201");
   await dialog.getByLabel("6-digit code").fill("864201");
-  await dialog.getByRole("button", { name: "Confirm and continue" }).click();
+  await dialog.getByRole("button", { name: "Verify and proceed" }).click();
 
   await expect(page.getByTestId("admin-notice")).toContainText(`Stall ${stall.code} disabled.`);
   const [row] = await s`select admin_status from booking.stalls where id = ${stall.id}`;

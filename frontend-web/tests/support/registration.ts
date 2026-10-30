@@ -17,6 +17,13 @@ export function nextAadhaar(): string {
   return withAadhaarCheckDigit(stem.slice(0, 11));
 }
 
+let mobileCounter = 0;
+/** A fresh 10-digit Indian mobile number: a primary phone may lead only one registration. */
+export function nextMobile(): string {
+  mobileCounter += 1;
+  return `9${process.pid % 10}${String(Date.now() % 1e4).padStart(4, "0")}${String(mobileCounter).padStart(4, "0")}`;
+}
+
 let ipCounter = 0;
 const nextIp = () => {
   ipCounter += 1;
@@ -81,7 +88,8 @@ export async function submitRegistration(body: Record<string, any>, prepared: Pr
     new Request(`${ORIGIN}/v1/auth/register`, {
       method: "POST",
       headers: headersFor(options, prepared.cookie),
-      body: JSON.stringify({ formToken: issueFormToken(Date.now() - 60_000), ...body, emailCode: options.emailCode ?? prepared.code }),
+      // The form requires the Aadhaar/PAN consent checkbox; a test can override it via body.
+      body: JSON.stringify({ formToken: issueFormToken(Date.now() - 60_000), consentAadhaarPan: true, ...body, emailCode: options.emailCode ?? prepared.code }),
     })
   );
   return { status: res.status, headers: res.headers, json: (await res.json()) as Record<string, any> };

@@ -16,20 +16,27 @@ test("E2E-01: a leader signs in with an emailed code and reaches the booking pag
   await seedStalls(2);
   const leader = await createLeader({ session: false });
 
+  // With the organisers' public map on, a visitor sees the map and signs in from a dialog
+  // after picking a stall.
+  await (await db())`update booking.settings set public_map = true`;
   await page.goto("/book-your-stall");
-  await expect(page).toHaveURL(/\/login\?next=%2Fbook-your-stall|\/login\?next=\/book-your-stall/);
-  await page.getByLabel("Email address").fill(leader.email);
-  await page.getByRole("button", { name: "Send sign-in code" }).click();
-  await expect(page.getByLabel("6-digit code")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Book your stall" })).toBeVisible();
+  await stall(page, "PG-A01").click();
+  await page.getByRole("button", { name: "Sign in as Leader to Book Stall PG-A01" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await dialog.getByPlaceholder("leader@example.com").fill(leader.email);
+  await dialog.getByRole("button", { name: "Send One-Time Code" }).click();
+  const codeInput = dialog.locator('input[autocomplete="one-time-code"]');
+  await expect(codeInput).toBeVisible();
 
   await plantLoginCode(leader.email, "246810");
-  await page.getByLabel("6-digit code").fill("246810");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("link", { name: "Continue to stall booking" }).click();
+  await codeInput.fill("246810");
+  await dialog.getByRole("button", { name: "Verify & Book" }).click();
 
-  await expect(page.getByRole("heading", { name: "Book your stall" })).toBeVisible();
+  await expect(dialog).toBeHidden();
   await expect(page.getByText(leader.teamName)).toBeVisible();
-  await expect(stall(page, "PG-A01")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Book my stall" })).toBeVisible();
 });
 
 test("E2E-02/03: Book my stall reserves the stall, asks to confirm, and confirming gives a reference", async ({ page, context }) => {
@@ -49,7 +56,7 @@ test("E2E-02/03: Book my stall reserves the stall, asks to confirm, and confirmi
   await expect(dialog).toContainText(/reserved for you for [45]:\d\d/);
   await expect(page.getByTestId("hold-panel")).toContainText("Stall PG-A02 is reserved for you");
   await expect(page.getByTestId("countdown")).toHaveText(/^[45]:\d\d$/);
-  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", "Stall PG-A02, Held by you");
+  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", /^Stall PG-A02 \(#\d+\), Held by you$/);
 
   await dialog.getByRole("button", { name: "Confirm booking" }).click();
 
@@ -63,7 +70,7 @@ test("E2E-02/03: Book my stall reserves the stall, asks to confirm, and confirmi
   await expect(booked).toContainText("Your stall is booked");
   const ref = (await booked.locator("span").last().textContent())!.trim();
   expect(ref).toMatch(/^SJ26-[0-9A-HJKMNP-TV-Z]{8}$/);
-  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", "Stall PG-A02, Your booking");
+  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", /^Stall PG-A02 \(#\d+\), Your booking$/);
 
   const s = await db();
   const [row] = await s`select status, booking_ref from booking.reservations where booking_ref = ${ref}`;
@@ -85,7 +92,7 @@ test("E2E-04: an unconfirmed reservation expires, the page says so and the stall
   await expect(page.getByTestId("notice")).toContainText("Your hold expired", { timeout: 15_000 });
   await expect(page.getByTestId("booked-dialog")).toHaveCount(0);
   await expect(page.getByTestId("hold-panel")).toHaveCount(0);
-  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", "Stall PG-A01, Available", { timeout: 10_000 });
+  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", /^Stall PG-A01 \(#\d+\), Available$/, { timeout: 10_000 });
 });
 
 test("E2E-05: a stale map cannot double-book: the server refuses and the map refreshes", async ({ page, context, request }) => {
@@ -95,7 +102,7 @@ test("E2E-05: a stale map cannot double-book: the server refuses and the map ref
   await signIn(context, me);
 
   await page.goto("/book-your-stall");
-  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", "Stall PG-A02, Available");
+  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", /^Stall PG-A02 \(#\d+\), Available$/);
 
   // Freeze this page's view: polls fail, so the map keeps showing PG-A02 as available.
   await page.route("**/v1/booking/stalls", (route) => route.abort());
@@ -107,7 +114,7 @@ test("E2E-05: a stale map cannot double-book: the server refuses and the map ref
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await page.unroute("**/v1/booking/stalls");
-  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", "Stall PG-A02, Held by another team", { timeout: 10_000 });
+  await expect(stall(page, "PG-A02")).toHaveAttribute("aria-label", /^Stall PG-A02 \(#\d+\), Held by another team$/, { timeout: 10_000 });
   const s = await db();
   const [row] = await s`select count(*)::int as n from booking.reservations where stall_id = ${target.id}`;
   expect(row.n).toBe(1);
@@ -165,15 +172,15 @@ test("LIVE-05: after going offline and back online the map catches up immediatel
   const [me, other] = [await createLeader(), await createLeader()];
   await signIn(context, me);
   await page.goto("/book-your-stall");
-  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", "Stall PG-A01, Available");
+  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", /^Stall PG-A01 \(#\d+\), Available$/);
 
   await context.setOffline(true);
   expect((await holdAs(request, other, first.id)).status()).toBe(201);
   await page.waitForTimeout(3_000);
-  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", "Stall PG-A01, Available"); // still stale while offline
+  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", /^Stall PG-A01 \(#\d+\), Available$/); // still stale while offline
 
   await context.setOffline(false);
-  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", "Stall PG-A01, Held by another team", { timeout: 5_000 });
+  await expect(stall(page, "PG-A01")).toHaveAttribute("aria-label", /^Stall PG-A01 \(#\d+\), Held by another team$/, { timeout: 5_000 });
 });
 
 test("an ineligible team sees why and cannot hold", async ({ page, context }) => {

@@ -12,7 +12,7 @@ import { describeLeaderTeam, lockLeaderTeam } from "@/lib/auth/leader";
 import { getDb } from "@/lib/db";
 import { HttpError } from "@/lib/http";
 import { capturedMailForTests } from "@/lib/mail";
-import { nextAadhaar, registerVerified } from "../support/registration";
+import { nextAadhaar, registerVerified, nextMobile } from "../support/registration";
 import { apiRequest, call, cookiePair } from "../support/http";
 
 const LEADER_COOKIE = "__Host-sj_session";
@@ -26,7 +26,7 @@ async function registerLeader(category = "startup_founder") {
   const memberEmail = `auth-member${n}@example.test`;
   const res = await registerVerified({
     category, teamName: `Auth Team ${n}`, fullName: `Auth Leader ${n}`, email, photoUrl: PHOTO,
-    mobile: "9876543210", altMobile: "9876543211", domain: "Agritech", projectDetails: "Details",
+    mobile: nextMobile(), altMobile: "9876543211", domain: "Agritech", projectDetails: "Details",
     city: "Gunupur", state: "Odisha", country: "India", linkedinUrl: "in/x", aadharNumber: nextAadhaar(),
     members: [{ name: `Member ${n}`, photoUrl: PHOTO, phone: "9123456780", email: memberEmail }],
   });
@@ -373,7 +373,7 @@ describe("AUTH-11/12 guards and admin separation", () => {
     const [before] = await sql`select * from app_auth.admin_users where id = ${admin.id}`;
     const res = await registerVerified({
       category: "startup_founder", teamName: "Admin Team", fullName: "Impostor", email: admin.email, photoUrl: PHOTO,
-      mobile: "9876543210", altMobile: "9876543211", domain: "d", projectDetails: "p", city: "c", state: "s",
+      mobile: nextMobile(), altMobile: "9876543211", domain: "d", projectDetails: "p", city: "c", state: "s",
       country: "India", linkedinUrl: "in/x", aadharNumber: nextAadhaar(),
       members: [{ name: "M", photoUrl: PHOTO, phone: "9123456780", email: `m-${admin.email}` }],
     });

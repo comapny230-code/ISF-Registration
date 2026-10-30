@@ -55,6 +55,9 @@ $$;
 grant select, insert, update, delete on app_auth.login_challenges, app_auth.rate_limits, app_auth.registration_email_challenges to isf_app;
 grant select, insert, update on app_auth.sessions to isf_app;
 grant select on app_auth.admin_users, app_auth.admin_grants to isf_app;
+-- Administrator passwords and adding administrators from the admin page (0010).
+grant update (password_hash) on app_auth.admin_users to isf_app;
+grant insert on app_auth.admin_users, app_auth.admin_grants to isf_app;
 
 -- Booking.
 grant select on booking.settings, booking.zones to isf_app;

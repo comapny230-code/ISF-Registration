@@ -27,7 +27,8 @@ async function fillRegistration(page: Page) {
   await expect(page.getByText(`We sent a 6-digit code to ${email}`)).toBeVisible();
   await plantRegistrationCode(email, "482916");
   await page.getByLabel("Email verification code").fill("482916");
-  await page.locator("#mobile").fill("9876543210");
+  // A primary phone can lead only one registration, so each run uses a fresh number.
+  await page.locator("#mobile").fill(`98${String(Date.now()).slice(-6)}${String(n).padStart(2, "0")}`);
   await page.locator("#altMobile").fill("9876543211");
   await page.locator("#city").fill("Gunupur");
   await page.locator("#state").fill("Odisha");
@@ -39,6 +40,7 @@ async function fillRegistration(page: Page) {
   await page.getByPlaceholder("priya@company.com").fill(`journey-member-${id}@example.test`);
   await page.locator("#member-photo-1").setInputFiles({ name: "member.png", mimeType: "image/png", buffer: PNG });
   await expect(page.getByText("Uploaded")).toBeVisible();
+  await page.locator("#consentAadhaarPanCheckbox").check();
   await page.locator("button.btn-submit-summit").click();
   return team;
 }

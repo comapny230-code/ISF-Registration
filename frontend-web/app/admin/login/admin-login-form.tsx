@@ -95,8 +95,8 @@ export function AdminLoginForm({ next }: Props) {
   // 3. Reset Password Confirm Handler
   async function handleResetConfirm(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters long.");
+    if (newPassword.length < 12) {
+      setError("New password must be at least 12 characters long.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -557,12 +557,12 @@ export function AdminLoginForm({ next }: Props) {
 
                   <div>
                     <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#1c1917", marginBottom: 6 }}>
-                      New Password (min 6 characters)
+                      New Password (min 12 characters)
                     </label>
                     <input
                       type="password"
                       required
-                      minLength={6}
+                      minLength={12}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Enter new secure password"
@@ -584,7 +584,7 @@ export function AdminLoginForm({ next }: Props) {
                     <input
                       type="password"
                       required
-                      minLength={6}
+                      minLength={12}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirm new password"
@@ -601,7 +601,7 @@ export function AdminLoginForm({ next }: Props) {
 
                   <button
                     type="submit"
-                    disabled={busy || resetCode.length !== 6 || newPassword.length < 6}
+                    disabled={busy || resetCode.length !== 6 || newPassword.length < 12}
                     style={{
                       width: "100%",
                       padding: "13px",
