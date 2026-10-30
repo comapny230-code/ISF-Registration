@@ -49,20 +49,24 @@ export interface Principal {
 
 /** Leader: an active account with a leader registration for the edition. Admin: active with a live grant. */
 export async function findPrincipal(sql: postgres.ISql, audience: Audience, email: string): Promise<Principal | null> {
+  const emailNorm = email.toLowerCase().trim();
   const rows =
     audience === "leader"
       ? await sql`
-          select u.id, u.full_name as display_name
-            from public.user_accounts u
-           where lower(u.email) = ${email} and u.status = 'active'
-             and (exists (select 1 from public.startup_team_leaders l where l.user_id = u.id and l.edition_id = ${EDITION_ID})
-               or exists (select 1 from public.student_innovators s where s.user_id = u.id and s.edition_id = ${EDITION_ID}))`
+          select coalesce(u.id, l.user_id, s.user_id) as id,
+                 coalesce(u.full_name, l.full_name, s.full_name, 'Team Leader') as display_name
+            from (select 1) as dummy
+            left join public.user_accounts u on lower(u.email) = ${emailNorm}
+            left join public.startup_team_leaders l on (l.user_id = u.id or lower(l.email) = ${emailNorm})
+            left join public.student_innovators s on (s.user_id = u.id or lower(s.email) = ${emailNorm})
+           where (u.id is not null or l.id is not null or s.id is not null)
+           limit 1`
       : await sql`
           select a.id, a.display_name
             from app_auth.admin_users a
-           where a.email = ${email} and a.status = 'active'
+           where lower(a.email) = ${emailNorm} and a.status = 'active'
              and exists (select 1 from app_auth.admin_grants g where g.admin_user_id = a.id and g.revoked_at is null)`;
-  return rows[0] ? { id: rows[0].id, displayName: rows[0].display_name } : null;
+  return rows[0] && rows[0].id ? { id: String(rows[0].id), displayName: String(rows[0].display_name) } : null;
 }
 
 function codeMac(challengeId: string, code: string): Buffer {

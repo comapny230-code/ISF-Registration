@@ -3,7 +3,6 @@ import Link from "next/link";
 import Image from "next/image";
 import "./globals.css";
 import { OrganizerLogos } from "./organizer-logos";
-import { getFeatureFlags } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "ISF · Startup Jathara @ Dandakaranya",
@@ -17,7 +16,6 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const { bookingUi } = getFeatureFlags();
   return (
     <html lang="en-IN">
       <body>
@@ -43,12 +41,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
 
             <div className="header-right">
-              {bookingUi && (
-                <Link href="/book-your-stall" className="nav-link" style={{ whiteSpace: "nowrap" }}>
-                  Book your stall
-                </Link>
-              )}
-              <Link href="/register" className="nav-btn-register">
+              <Link
+                href="/"
+                className="nav-btn-home"
+                aria-label="Home"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+                <span>Home</span>
+              </Link>
+              <Link
+                href="/book-your-stall"
+                className="nav-btn-home"
+                style={{ borderColor: "var(--color-forest)", color: "var(--color-forest)" }}
+                aria-label="Book Your Stall"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span>Book Stall</span>
+              </Link>
+              <Link
+                href="/register"
+                className="nav-btn-register"
+                aria-label="Register"
+              >
                 <span>Register</span>
                 <span className="btn-arrow">→</span>
               </Link>

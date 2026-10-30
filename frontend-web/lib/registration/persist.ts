@@ -36,6 +36,8 @@ export interface RegistrationInput {
   projectReportUrl: string | null;
   aadharNumber: string;
   panNumber: string | null;
+  idConsentGiven?: boolean;
+  idConsentIp?: string | null;
   city: string;
   state: string;
   country: string;
@@ -51,9 +53,23 @@ export class AadhaarAlreadyRegisteredError extends Error {
   }
 }
 
+export class PanAlreadyRegisteredError extends Error {
+  constructor() {
+    super("pan number already has a registration");
+    this.name = "PanAlreadyRegisteredError";
+  }
+}
+
+export class PhoneAlreadyRegisteredError extends Error {
+  constructor() {
+    super("primary phone number already has a leader registration");
+    this.name = "PhoneAlreadyRegisteredError";
+  }
+}
+
 export class AlreadyRegisteredError extends Error {
   constructor() {
-    super("email already has a leader registration");
+    super("email already has a leader or member registration");
     this.name = "AlreadyRegisteredError";
   }
 }
@@ -91,19 +107,22 @@ export async function persistRegistration(
     }
 
     const memberSummary = input.members.map((m, i) => `${i + 1}. ${m.name} (${m.email}, ${m.phone})`).join("; ");
+    const consentGiven = input.idConsentGiven === true;
 
-    // Create the account if it is new; an existing account is used as-is and never modified.
+    // Create the account if it is new; an existing account is used as-is and never modified (no overwrites).
     await tx`
       insert into user_accounts (
         auth_subject, email, full_name, mobile_e164, password_hash,
         status, category, team_name, team_members, team_members_json, photo_url,
         domain, project_details, project_report_url, aadhar_number, pan_number,
-        alt_mobile, city, state, country, linkedin_url
+        alt_mobile, city, state, country, linkedin_url,
+        id_consent_given, id_consent_at, id_consent_ip
       ) values (
         ${`dev|${input.email}`}, ${input.email}, ${input.fullName}, ${input.mobile}, ${input.passwordHash},
         'active', ${input.category}, ${input.teamName}, ${memberSummary}, ${JSON.stringify(input.members)}::jsonb, ${input.photoUrl},
         ${input.domain}, ${input.projectDetails || null}, ${input.projectReportUrl}, ${input.aadharNumber}, ${input.panNumber},
-        ${input.altMobile}, ${input.city}, ${input.state}, ${input.country}, ${input.linkedinUrl}
+        ${input.altMobile}, ${input.city}, ${input.state}, ${input.country}, ${input.linkedinUrl},
+        ${consentGiven}, ${consentGiven ? tx`clock_timestamp()` : null}, ${input.idConsentIp || null}
       )
       on conflict (lower(email)) where email is not null do nothing`;
 
@@ -111,18 +130,38 @@ export async function persistRegistration(
     const [account] = await tx`select id from user_accounts where lower(email) = ${input.email} for update`;
     const userId: string = account.id;
 
+    // Check 1: Anti-overwrite guarantee for email (cannot overwrite existing leader or member)
     const [existing] = await tx`
-      select exists (select 1 from startup_team_leaders where user_id = ${userId})
-          or exists (select 1 from student_innovators where user_id = ${userId}) as registered`;
+      select exists (select 1 from startup_team_leaders where user_id = ${userId} or lower(email) = ${input.email})
+          or exists (select 1 from student_innovators where user_id = ${userId} or lower(email) = ${input.email})
+          or exists (select 1 from startup_team_members where lower(email) = ${input.email})
+          or exists (select 1 from student_team_members where lower(email) = ${input.email}) as registered`;
     if (existing.registered) throw new AlreadyRegisteredError();
 
-    // One leader registration per Aadhaar number (both tracks). Concurrent registrations with
-    // the same number serialise on this lock, so only one can pass the check.
+    // Check 2: Anti-overwrite guarantee for Aadhaar across tracks and accounts
     await tx`select pg_advisory_xact_lock(hashtext(${`isf-aadhaar:${input.aadharNumber}`}))`;
     const [aadhaar] = await tx`
       select exists (select 1 from startup_team_leaders where aadhar_number = ${input.aadharNumber} and edition_id = ${EDITION_ID})
-          or exists (select 1 from student_innovators where aadhar_number = ${input.aadharNumber} and edition_id = ${EDITION_ID}) as taken`;
+          or exists (select 1 from student_innovators where aadhar_number = ${input.aadharNumber} and edition_id = ${EDITION_ID})
+          or exists (select 1 from user_accounts where aadhar_number = ${input.aadharNumber} and id <> ${userId}) as taken`;
     if (aadhaar.taken) throw new AadhaarAlreadyRegisteredError();
+
+    // Check 3: Anti-overwrite guarantee for PAN across tracks and accounts (if PAN is provided)
+    if (input.panNumber) {
+      const panClean = input.panNumber.trim().toUpperCase();
+      await tx`select pg_advisory_xact_lock(hashtext(${`isf-pan:${panClean}`}))`;
+      const [pan] = await tx`
+        select exists (select 1 from startup_team_leaders where upper(pan_number) = ${panClean} and edition_id = ${EDITION_ID})
+            or exists (select 1 from student_innovators where upper(pan_number) = ${panClean} and edition_id = ${EDITION_ID})
+            or exists (select 1 from user_accounts where upper(pan_number) = ${panClean} and id <> ${userId}) as taken`;
+      if (pan.taken) throw new PanAlreadyRegisteredError();
+    }
+
+    // Check 4: Anti-overwrite guarantee for Primary Mobile number
+    const [phone] = await tx`
+      select exists (select 1 from startup_team_leaders where mobile = ${input.mobile} and edition_id = ${EDITION_ID})
+          or exists (select 1 from student_innovators where mobile = ${input.mobile} and edition_id = ${EDITION_ID}) as taken`;
+    if (phone.taken) throw new PhoneAlreadyRegisteredError();
 
     await tx`insert into role_grants (user_id, role, edition_id) values (${userId}, 'startup_team_leader', ${EDITION_ID}) on conflict do nothing`;
     await tx`insert into edition_access (user_id, edition_id, source) values (${userId}, ${EDITION_ID}, 'predefined') on conflict do nothing`;
@@ -139,19 +178,22 @@ export async function persistRegistration(
       ${userId}, ${startup.id}, ${input.teamName}, ${input.fullName}, ${input.email},
       ${input.mobile}, ${input.altMobile}, ${input.domain}, ${input.projectDetails || null}, ${input.projectReportUrl},
       ${input.aadharNumber}, ${input.panNumber}, ${input.city}, ${input.state}, ${input.country},
-      ${input.linkedinUrl}, ${input.photoUrl}, ${EDITION_ID}
+      ${input.linkedinUrl}, ${input.photoUrl}, ${EDITION_ID},
+      ${consentGiven}, ${consentGiven ? tx`clock_timestamp()` : null}
     )`;
     const [leaderRow] =
       input.track === "senior"
         ? await tx`
             insert into startup_team_leaders (
               user_id, startup_id, team_name, full_name, email, mobile, alt_mobile, domain, project_details,
-              project_report_url, aadhar_number, pan_number, city, state, country, linkedin_url, photo_url, edition_id
+              project_report_url, aadhar_number, pan_number, city, state, country, linkedin_url, photo_url, edition_id,
+              id_consent_given, id_consent_at
             ) values ${leaderValues} returning id`
         : await tx`
             insert into student_innovators (
               user_id, startup_id, team_name, full_name, email, mobile, alt_mobile, domain, project_details,
-              project_report_url, aadhar_number, pan_number, city, state, country, linkedin_url, photo_url, edition_id
+              project_report_url, aadhar_number, pan_number, city, state, country, linkedin_url, photo_url, edition_id,
+              id_consent_given, id_consent_at
             ) values ${leaderValues} returning id`;
 
     const senior = input.track === "senior";

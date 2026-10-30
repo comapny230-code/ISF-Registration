@@ -199,6 +199,7 @@ export default function RegisterPage() {
   const [projectReportFile, setProjectReportFile] = useState<{ name: string; dataUrl: string; size: string } | null>(null);
   const [aadharNumber, setAadharNumber] = useState("");
   const [panNumber, setPanNumber] = useState("");
+  const [consentAadhaarPan, setConsentAadhaarPan] = useState(false);
 
   // Team members (1 to 5 members)
   const [members, setMembers] = useState<TeamMemberInput[]>([
@@ -314,10 +315,11 @@ export default function RegisterPage() {
     if (mobile.trim()) score += 10;
     if (leadPhoto) score += 10;
     if (aadharNumber.trim().replace(/[\s-]/g, "").length === 12) score += 10;
+    if (consentAadhaarPan) score += 5;
     if (projectReportFile || projectReportUrl) score += 10;
     if (members.length > 0 && members[0].name.trim()) score += 10;
     return Math.min(score, 100);
-  }, [category, teamName, fullName, projectDetails, email, mobile, leadPhoto, aadharNumber, projectReportFile, projectReportUrl, members]);
+  }, [category, teamName, fullName, projectDetails, email, mobile, leadPhoto, aadharNumber, consentAadhaarPan, projectReportFile, projectReportUrl, members]);
 
 
   // Lead photo upload handler
@@ -450,6 +452,10 @@ export default function RegisterPage() {
           return;
         }
       }
+      if (!consentAadhaarPan) {
+        handleFormError("Statutory DPDP consent for Aadhaar & PAN verification is required to complete your registration.");
+        return;
+      }
       if (!city.trim()) {
         handleFormError("Please enter your City.");
         return;
@@ -525,6 +531,7 @@ export default function RegisterPage() {
           projectReport: projectReportFile ? projectReportFile.dataUrl : (projectReportUrl.trim() || null),
           aadharNumber: aadharNumber.trim() ? aadharNumber.replace(/[\s-]/g, "") : null,
           panNumber: panNumber.trim() ? panNumber.trim().toUpperCase() : null,
+          consentAadhaarPan,
           city: city.trim(),
           state: state.trim(),
           country: country.trim(),
@@ -2312,6 +2319,93 @@ export default function RegisterPage() {
                       <span style={{ fontSize: "11px", color: "#78716c", marginTop: "2px" }}>
                         10-character Permanent Account Number
                       </span>
+                    </div>
+
+                    {/* DPDP Act 2023 Statutory Consent Box for Aadhaar & PAN */}
+                    <div
+                      className="form-group-item field-full-width"
+                      style={{
+                        marginTop: "8px",
+                        padding: "16px 18px",
+                        background: consentAadhaarPan ? "#f0fdf4" : "#fffbf0",
+                        border: consentAadhaarPan ? "1.5px solid #86efac" : "1.5px solid #fcd34d",
+                        borderRadius: "14px",
+                        transition: "all 0.25s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                        <div
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "10px",
+                            background: consentAadhaarPan ? "#dcfce7" : "#fef3c7",
+                            color: consentAadhaarPan ? "#15803d" : "#b45309",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                            <span style={{ fontSize: "13px", fontWeight: 800, color: "#143e30" }}>
+                              Statutory DPDP Act 2023 & UIDAI Identity Consent
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                fontWeight: 800,
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                background: consentAadhaarPan ? "#bbf7d0" : "#fee2e2",
+                                color: consentAadhaarPan ? "#14532d" : "#991b1b",
+                                fontFamily: "var(--font-mono)",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {consentAadhaarPan ? "Consent Granted" : "Required Step *"}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "11.5px", lineHeight: "1.55", color: "#57534e", margin: "4px 0 10px" }}>
+                            In accordance with the Digital Personal Data Protection (DPDP) Act 2023 and UIDAI guidelines, your Aadhaar and PAN credentials are collected solely for participant identity verification, security accreditation, and summit pass issuance for <strong>ISF Startup Jathara 2026</strong>. Credentials are encrypted and protected against unauthorized access. Registrations cannot be overwritten once submitted.
+                          </p>
+                          <label
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              cursor: "pointer",
+                              userSelect: "none",
+                              fontSize: "12.5px",
+                              fontWeight: 700,
+                              color: consentAadhaarPan ? "#15803d" : "#1c1917",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              id="consentAadhaarPanCheckbox"
+                              checked={consentAadhaarPan}
+                              onChange={(e) => setConsentAadhaarPan(e.target.checked)}
+                              style={{
+                                width: "18px",
+                                height: "18px",
+                                accentColor: "#143e30",
+                                cursor: "pointer",
+                                borderRadius: "4px",
+                              }}
+                            />
+                            <span>
+                              I voluntarily give my consent for Aadhaar & PAN verification for summit accreditation <span style={{ color: "#b91c1c" }}>*</span>
+                            </span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

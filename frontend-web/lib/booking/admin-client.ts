@@ -52,13 +52,78 @@ const qs = (params: Record<string, string | null | undefined>) => {
   return text ? `?${text}` : "";
 };
 
+export interface AdminStats {
+  registrations: {
+    totalTeams: number;
+    totalMembers: number;
+    totalUsers: number;
+    seniorCount: number;
+    juniorCount: number;
+  };
+  stalls: {
+    total: number;
+    booked: number;
+    held: number;
+    available: number;
+    disabled: number;
+    byZone: Record<string, { total: number; booked: number; held: number; available: number; disabled: number }>;
+  };
+}
+
+export interface AdminRegistrationItem {
+  id: string;
+  userId: string;
+  teamId: string | null;
+  track: "senior" | "junior";
+  teamName: string;
+  leaderName: string;
+  email: string;
+  mobile: string;
+  altMobile: string;
+  domain: string;
+  projectDetails: string | null;
+  projectReportUrl: string | null;
+  city: string;
+  state: string;
+  country: string;
+  linkedinUrl: string;
+  photoUrl: string | null;
+  consentGiven: boolean;
+  createdAt: string;
+  approvalStatus: "pending" | "approved" | "rejected";
+  members: Array<{ name: string; email: string; phone: string; photoUrl: string | null }>;
+  reservation: null | { kind: "hold" | "booking"; stallCode: string; bookingRef?: string | null };
+}
+
+export interface AdminUserItem {
+  id: string;
+  email: string;
+  displayName: string;
+  status: string;
+  createdAt: string;
+  lastLoginAt?: string | null;
+  permissions?: string[];
+}
+
 export const adminApi = {
+  stats: () => request<AdminStats>("/v1/admin/stats"),
+  registrations: () => request<{ total: number; registrations: AdminRegistrationItem[] }>("/v1/admin/registrations"),
+  updateRegistration: (id: string, data: Record<string, any>) => post(`/v1/admin/registrations/${encodeURIComponent(id)}`, data, "PATCH"),
+  deleteRegistration: (id: string) => request<{ ok: true; message: string }>(`/v1/admin/registrations/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  createStall: (data: { zone: "PG" | "BB"; code: string; width?: number; depth?: number; x: number; y: number; rotation?: number }) =>
+    post<{ ok: true; stall: any }>("/v1/admin/stalls", data),
+  updateStall: (stallId: string, data: { code?: string; width?: number; depth?: number; x?: number; y?: number; rotation?: number }) =>
+    post<{ ok: true; stall: any }>(`/v1/admin/stalls/${encodeURIComponent(stallId)}`, data, "PATCH"),
+  deleteStall: (stallId: string) => request<{ ok: true; message: string }>(`/v1/admin/stalls/${encodeURIComponent(stallId)}`, { method: "DELETE" }),
   bookings: (cursor?: string | null) => request<Page<AdminBooking>>(`/v1/admin/bookings${qs({ cursor, limit: "50" })}`),
   teams: (approval?: string | null, cursor?: string | null) =>
     request<Page<AdminTeam> & { unresolved: { ambiguousLeaders: number; nullEditionLeaders: number; leadersWithoutTeam: number } }>(
       `/v1/admin/teams${qs({ approval, cursor, limit: "50" })}`
     ),
   audit: (cursor?: string | null) => request<Page<AuditItem>>(`/v1/admin/audit${qs({ cursor, limit: "50" })}`),
+  users: () => request<{ users: AdminUserItem[] }>(`/v1/admin/users`),
+  createUser: (data: { email: string; displayName: string; password: string }) =>
+    post<{ ok: true; admin: { id: string; email: string; displayName: string } }>(`/v1/admin/users`, data),
   cancel: (bookingId: string, reason: string, requestId: string) =>
     post(`/v1/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, { reason, requestId }),
   availability: (stallId: string, action: "disable" | "enable", reason: string, force: boolean, requestId: string) =>

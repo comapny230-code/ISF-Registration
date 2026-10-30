@@ -14,7 +14,9 @@
     "test-db:start": "node scripts/test-db.mjs start",
     "test-db:stop": "node scripts/test-db.mjs stop",
     "preflight": "node --experimental-transform-types --no-warnings --import ./scripts/node-ts-hooks.mjs scripts/preflight.mts",
-    "mail:check": "node --experimental-transform-types --no-warnings --import ./scripts/node-ts-hooks.mjs scripts/mail-check.mts"
+    "mail:check": "node --experimental-transform-types --no-warnings --import ./scripts/node-ts-hooks.mjs scripts/mail-check.mts",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:verify": "node scripts/db-setup.mjs --verify-only"
   },
   "dependencies": {
     "jose": "6.2.12",

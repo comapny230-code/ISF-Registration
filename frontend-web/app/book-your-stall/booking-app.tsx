@@ -7,6 +7,7 @@ import { ARRANGEMENTS_CONTACT } from "@/lib/booking/contact";
 import { BookedDialog } from "./components/booked-dialog";
 import { ConfirmDialog } from "./components/confirm-dialog";
 import { HoldPanel } from "./components/hold-panel";
+import { LeaderSignInDialog } from "./components/leader-sign-in-dialog";
 import { StallLegend, StallMap, StallPatterns, ZOOM_LEVELS } from "./components/stall-map";
 import { StallList } from "./components/stall-list";
 import { formatIst, hasGeometry, stallLabel, stallMark } from "./components/stall-status";
@@ -48,6 +49,8 @@ export function BookingApp({ displayName }: { displayName: string }) {
   // Set only from a successful confirmation response, so failures never show it.
   const [justBooked, setJustBooked] = useState<{ stallCode: string; bookingRef: string } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [currentDisplayName, setCurrentDisplayName] = useState(displayName);
   const pollerRef = useRef<StatusPoller<Snapshot> | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
 
@@ -65,7 +68,10 @@ export function BookingApp({ displayName }: { displayName: string }) {
     try {
       setMe(await bookingApi.me());
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) return toLogin();
+      if (err instanceof ApiError && err.status === 401) {
+        setMe(null);
+        return;
+      }
       setNotice({ kind: "error", text: err instanceof ApiError ? err.message : "Could not load your booking status." });
     }
   }, []);
@@ -79,7 +85,7 @@ export function BookingApp({ displayName }: { displayName: string }) {
         setOffsetMs(serverOffsetMs(s.serverNow, receivedAt));
       },
       onError: (err) => {
-        if (err instanceof ApiError && err.status === 401) toLogin();
+        if (err instanceof ApiError && err.status === 401) setMe(null);
       },
     });
     pollerRef.current = poller;
@@ -219,22 +225,46 @@ export function BookingApp({ displayName }: { displayName: string }) {
       <StallPatterns />
       <header className={styles.hero}>
         <div className={styles.heroInner}>
-          <div>
-            <h1 className={styles.heroTitle}>Book your stall</h1>
-            {me && (
-              <p className={styles.heroTeam}>
-                <strong>{me.team.name}</strong>
-                <span className={styles.trackPill}>{me.team.track === "senior" ? "Senior track" : "Junior track"}</span>
-              </p>
-            )}
-            <p className={styles.heroMeta}>
-              Signed in as {displayName}
-              {me?.bookingWindow.closesAt ? `. Booking closes ${formatIst(me.bookingWindow.closesAt)}.` : ""}
-            </p>
-          </div>
-          <button className={styles.heroButton} type="button" onClick={signOut}>
-            Sign out
-          </button>
+          {me ? (
+            <>
+              <div>
+                <h1 className={styles.heroTitle}>Book your stall</h1>
+                <p className={styles.heroTeam}>
+                  <strong>{me.team.name}</strong>
+                  <span className={styles.trackPill}>{me.team.track === "senior" ? "Senior track" : "Junior track"}</span>
+                </p>
+                <p className={styles.heroMeta}>
+                  Signed in as {currentDisplayName || displayName || me.team.name}
+                  {me?.bookingWindow.closesAt ? `. Booking closes ${formatIst(me.bookingWindow.closesAt)}.` : ""}
+                </p>
+              </div>
+              <button className={styles.heroButton} type="button" onClick={signOut}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <h1 className={styles.heroTitle}>Select & Book Your Stall</h1>
+                <p className={styles.heroMeta}>
+                  Explore available stalls on the interactive venue map. Select an available stall and sign in as your registered Team Leader to secure your booking.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setSignInOpen(true)}
+                  className="btn btn-primary"
+                  style={{ padding: "8px 16px", cursor: "pointer" }}
+                >
+                  Sign In as Leader
+                </button>
+                <a href="/register" className="btn btn-secondary" style={{ padding: "8px 16px", textDecoration: "none" }}>
+                  Register Team
+                </a>
+              </div>
+            </>
+          )}
         </div>
         <ol className={styles.steps} aria-label="Booking steps">
           {steps.map((label, i) => {
@@ -413,9 +443,19 @@ export function BookingApp({ displayName }: { displayName: string }) {
                             </dd>
                           </div>
                         </dl>
-                        <button className={`btn btn-primary ${styles.bigButton}`} type="button" onClick={bookStall} disabled={busy || !canHold}>
-                          {busy ? "Reserving…" : "Book my stall"}
-                        </button>
+                        {me ? (
+                          <button className={`btn btn-primary ${styles.bigButton}`} type="button" onClick={bookStall} disabled={busy || !canHold}>
+                            {busy ? "Reserving…" : "Book my stall"}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSignInOpen(true)}
+                            className={`btn btn-primary ${styles.bigButton}`}
+                          >
+                            Sign in as Leader to Book Stall {selected.code}
+                          </button>
+                        )}
                         <p className="muted small" style={{ margin: 0 }}>
                           The stall is kept for you for 5 minutes while you confirm. Your team can book one stall.
                         </p>
@@ -451,6 +491,22 @@ export function BookingApp({ displayName }: { displayName: string }) {
             busy={busy}
             onConfirm={confirmBooking}
             onCancel={() => setConfirmOpen(false)}
+          />
+        )}
+
+        {signInOpen && (
+          <LeaderSignInDialog
+            selectedStallCode={selected?.code}
+            onSuccess={async ({ displayName: name }) => {
+              setCurrentDisplayName(name);
+              setSignInOpen(false);
+              await Promise.all([loadMe(), pollerRef.current?.refresh()]);
+              setNotice({
+                kind: "ok",
+                text: `Signed in successfully as ${name}! You can now reserve and book your stall.`,
+              });
+            }}
+            onClose={() => setSignInOpen(false)}
           />
         )}
       </div>

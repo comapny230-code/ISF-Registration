@@ -57,7 +57,12 @@ export function SignInForm({ audience, title, intro, next, nextLabel }: Props) {
     const res = await post("/v1/auth/otp/verify", { email, audience, code });
     setBusy(false);
     if (!res.ok) return setError(errorText(res.data, "That code did not work. Please try again."));
-    setDisplayName(res.data.principal?.displayName || "");
+    const name = res.data.principal?.displayName || "";
+    setDisplayName(name);
+    if (next) {
+      window.location.assign(next);
+      return;
+    }
     setStep("done");
   }
 

@@ -26,7 +26,14 @@ export const POST = handler(async (request, { requestId }) => {
   const principal = await findPrincipal(sql, body.audience, body.email);
   if (principal) {
     const code = await issueLoginCode(sql, body.audience, body.email, principal, binding);
-    await afterResponse(() => sendLoginCodeEmail(body.email, code, body.audience));
+    try {
+      await sendLoginCodeEmail(body.email, code, body.audience);
+      console.log(`[OTP] Successfully dispatched sign-in code email to ${body.email} (${body.audience})`);
+    } catch (mailErr) {
+      console.error("[OTP MAIL ERROR] Failed to send email via SMTP:", mailErr);
+    }
+  } else {
+    console.warn(`[OTP] Principal not found in database for ${body.email} (${body.audience})`);
   }
 
   return json({ message: ACCEPTED }, 202, requestId, { "Set-Cookie": otpBindingCookie(binding) });

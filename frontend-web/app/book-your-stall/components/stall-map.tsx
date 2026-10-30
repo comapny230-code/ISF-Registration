@@ -136,7 +136,9 @@ export function StallMap({ zone, stalls, selectedId, onSelect, zoom = 3.2 }: Pro
       <Landmarks landmarks={zone.landmarks} />
       {placed.map((stall) => {
         const selected = stall.id === selectedId;
-        const label = `Stall ${stall.code}, ${stallLabel(stall)}`;
+        const numMatch = stall.code.match(/\d+$/);
+        const stallNum = numMatch ? String(parseInt(numMatch[0], 10)) : stall.code.slice(3);
+        const label = `Stall ${stall.code} (#${stallNum}), ${stallLabel(stall)}`;
         return (
           <g
             key={stall.id}
@@ -160,7 +162,7 @@ export function StallMap({ zone, stalls, selectedId, onSelect, zoom = 3.2 }: Pro
             <rect className={styles.stallTop} width={stall.w} height={stall.d} rx={0.8} />
             <path className={styles.canopy} d={`M0 0L${stall.w} ${stall.d}M${stall.w} 0L0 ${stall.d}`} />
             <text x={stall.w / 2} y={stall.d * (stallMark(stall) ? 0.38 : 0.5)} textAnchor="middle" dominantBaseline="central">
-              {stall.code.slice(3)}
+              {stallNum}
             </text>
             {stallMark(stall) && (
               <text className={styles.mark} x={stall.w / 2} y={stall.d * 0.7} textAnchor="middle" dominantBaseline="central">
