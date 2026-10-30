@@ -59,9 +59,15 @@ jobs:
 
       - name: Start isolated test Postgres (localhost only, cluster_name=isf-test)
         run: |
-          PG_BIN="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)"
-          echo "PG_BIN=${PG_BIN}" >> "$GITHUB_ENV"
-          PG_BIN="${PG_BIN}" node scripts/test-db.mjs start
+          sudo systemctl stop postgresql 2>/dev/null || true
+          PG_BIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$PG_BIN" ]; then
+            echo "$PG_BIN" >> "$GITHUB_PATH"
+            echo "PG_BIN=${PG_BIN}" >> "$GITHUB_ENV"
+            export PATH="${PG_BIN}:${PATH}"
+            export PG_BIN
+          fi
+          node scripts/test-db.mjs start
 
       - name: Database and integration tests
         run: npm run test:db

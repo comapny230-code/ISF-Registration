@@ -12,7 +12,7 @@
  * Set PG_BIN if initdb/pg_ctl/psql are not on PATH.
  */
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,7 +33,17 @@ function run(name, args, { allowFail = false, detachedOutput = false } = {}) {
   const result = spawnSync(bin(name), args, { encoding: "utf8", stdio: detachedOutput ? "ignore" : "pipe" });
   if (result.error) throw result.error;
   if (result.status !== 0 && !allowFail) {
-    process.stderr.write((result.stdout ?? "") + (result.stderr ?? ""));
+    if (result.stdout || result.stderr) {
+      process.stderr.write((result.stdout ?? "") + (result.stderr ?? ""));
+    }
+    if (existsSync(logFile)) {
+      try {
+        const logContent = readFileSync(logFile, "utf8");
+        if (logContent.trim()) {
+          process.stderr.write(`\n--- PostgreSQL log (${logFile}) ---\n${logContent}\n-----------------------------------\n`);
+        }
+      } catch {}
+    }
     throw new Error(`${name} exited with ${result.status}`);
   }
   return result;
@@ -47,17 +57,28 @@ function psql(database, user, sql) {
 function init() {
   mkdirSync(dataRoot, { recursive: true });
   run("initdb", ["-D", dataDir, "-U", BOOTSTRAP_USER, "-A", "trust", "-E", "UTF8", "--no-locale"]);
+  const unixSocket = process.platform === "win32" ? "" : "unix_socket_directories = '/tmp'\n";
   appendFileSync(
     path.join(dataDir, "postgresql.conf"),
-    `\n# isf-test settings\nport = ${PORT}\nlisten_addresses = 'localhost'\ncluster_name = 'isf-test'\n`
+    `\n# isf-test settings\nport = ${PORT}\nlisten_addresses = 'localhost,127.0.0.1'\ncluster_name = 'isf-test'\n${unixSocket}`
   );
 }
 
 function start() {
   if (!existsSync(path.join(dataDir, "PG_VERSION"))) init();
+
+  const confPath = path.join(dataDir, "postgresql.conf");
+  if (existsSync(confPath) && process.platform !== "win32") {
+    const conf = readFileSync(confPath, "utf8");
+    if (!conf.includes("unix_socket_directories")) {
+      appendFileSync(confPath, "\nunix_socket_directories = '/tmp'\n");
+    }
+  }
+
   const status = run("pg_ctl", ["-D", dataDir, "status"], { allowFail: true });
   if (status.status !== 0) {
-    run("pg_ctl", ["-D", dataDir, "-l", logFile, "-w", "start"], { detachedOutput: true });
+    const extraArgs = process.platform === "win32" ? [] : ["-o", "-k /tmp"];
+    run("pg_ctl", ["-D", dataDir, "-l", logFile, "-w", "start", ...extraArgs], { detachedOutput: true });
   }
 
   const roleExists = psql("postgres", BOOTSTRAP_USER, "select 1 from pg_roles where rolname = 'isf_test'");
