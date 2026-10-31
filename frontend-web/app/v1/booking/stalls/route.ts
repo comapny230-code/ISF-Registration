@@ -145,16 +145,13 @@ export const GET = handler(async (request, { requestId }) => {
 
     const teamId = leader ? await viewerTeamId(sql, leader.principalId).catch(() => null) : null;
     const snapshot = await stallSnapshot(sql, teamId, zone ?? undefined);
-    if (snapshot && snapshot.stalls.length > 0) {
-      return json(snapshot, 200, requestId, { Vary: "Cookie" });
-    }
+    return json(snapshot, 200, requestId, { Vary: "Cookie" });
   } catch (err) {
-    if (err instanceof HttpError && err.status === 401) {
+    if (err instanceof HttpError) {
       throw err;
     }
     console.error("Stalls route database fetch error, falling back to static map snapshot:", err);
+    return json(getFallbackSnapshot(zone ?? undefined), 200, requestId, { Vary: "Cookie" });
   }
-
-  return json(getFallbackSnapshot(zone ?? undefined), 200, requestId, { Vary: "Cookie" });
 });
 
