@@ -56,7 +56,7 @@ function isLocalHost(host: string): boolean {
 
 export interface DatabaseConfig {
   url: string;
-  ssl: false | { ca: string; rejectUnauthorized: true };
+  ssl: false | "require" | { ca: string; rejectUnauthorized: true };
   /** Set only for APP_ENV=test: the database name the post-connect guard must see. */
   testDatabase?: string;
 }
@@ -128,11 +128,18 @@ export function getDatabaseConfig(env: Env = process.env): DatabaseConfig {
   }
 
   const ca = optional(env, "DATABASE_CA_CERT");
-  if ((appEnv === "staging" || appEnv === "production") && !ca) {
+  const isSupabase = url.includes("supabase.co") || url.includes("pooler.supabase.com");
+  if ((appEnv === "staging" || appEnv === "production") && !ca && !isSupabase) {
     throw new ConfigError("DATABASE_CA_CERT", "is required in staging and production (TLS must be verified)");
   }
 
-  return { url, ssl: ca ? { ca: normalizePem(ca), rejectUnauthorized: true } : false };
+  const ssl = ca
+    ? { ca: normalizePem(ca), rejectUnauthorized: true as const }
+    : isSupabase || url.includes("sslmode=require") || appEnv === "production"
+    ? "require"
+    : false;
+
+  return { url, ssl };
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +196,10 @@ export function getMailConfig(env: Env = process.env): MailConfig {
     if (Boolean(user) !== Boolean(pass)) {
       throw new ConfigError(user ? "SMTP_PASS" : "SMTP_USER", "SMTP_USER and SMTP_PASS must be set together");
     }
-    if ((appEnv === "local" || appEnv === "test") && !isLocalHost(host)) {
+    if (appEnv === "test" && !isLocalHost(host)) {
+      throw new ConfigError("SMTP_HOST", "must be a local mail catcher in test");
+    }
+    if (appEnv === "local" && !isLocalHost(host) && (!user || !pass)) {
       throw new ConfigError("SMTP_HOST", "must be a local mail catcher in local and test");
     }
     const deployed = appEnv === "staging" || appEnv === "production";

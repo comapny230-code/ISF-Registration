@@ -19,7 +19,8 @@ export const capturedMailForTests: CapturedMail[] = [];
 function isAllowed(recipient: string, allowlist: string[]): boolean {
   const address = recipient.trim().toLowerCase();
   return allowlist.some((entry) => {
-    const rule = entry.toLowerCase();
+    const rule = entry.trim().toLowerCase();
+    if (rule === "*" || rule === "all") return true;
     return rule.startsWith("@") ? address.endsWith(rule) : address === rule;
   });
 }

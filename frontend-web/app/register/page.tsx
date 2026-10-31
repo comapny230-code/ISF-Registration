@@ -162,23 +162,9 @@ export function normalizeLinkedInUrl(input: string): string {
   return `https://www.linkedin.com/in/${cleanUsername}`;
 }
 
-// Universal E.164 phone normalizer
-export function normalizeMobileNumber(input: string): string | null {
-  if (!input) return null;
-  let s = String(input).trim().replace(/[\s\-().]/g, "");
-  if (!s) return null;
-
-  if (s.startsWith("00")) s = "+" + s.slice(2);
-  if (/^[6-9]\d{9}$/.test(s)) return `+91${s}`;
-  if (/^0[6-9]\d{9}$/.test(s)) return `+91${s.slice(1)}`;
-  if (/^91[6-9]\d{9}$/.test(s)) return `+${s}`;
-  if (/^\d{10}$/.test(s)) return `+91${s}`;
-  if (/^0\d{10}$/.test(s)) return `+91${s.slice(1)}`;
-  if (/^91\d{10}$/.test(s)) return `+${s}`;
-  if (/^\+[1-9]\d{7,14}$/.test(s)) return s;
-  if (/^[1-9]\d{7,14}$/.test(s)) return `+${s}`;
-  return null;
-}
+// Universal E.164 phone normalizer and validator
+import { normalizeMobileNumber, validatePhoneNumber } from "@/lib/registration/phone";
+export { normalizeMobileNumber, validatePhoneNumber };
 
 export default function RegisterPage() {
   const [category, setCategory] = useState<CategoryId>("startup_founder");
@@ -381,8 +367,8 @@ export default function RegisterPage() {
     setError(null);
 
     const normEmail = email.trim().toLowerCase();
-    if (!normEmail || !normEmail.includes("@")) {
-      handleFormError("Please provide a valid official email address.");
+    if (!normEmail || !/^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(normEmail)) {
+      handleFormError("Please provide a valid official email address (e.g. leader@company.com).");
       return;
     }
     if (captchaSiteKey && !captchaToken) {
@@ -407,21 +393,36 @@ export default function RegisterPage() {
         handleFormError("Please upload the Team Lead Photograph for summit pass accreditation.");
         return;
       }
+      if (!country.trim()) {
+        handleFormError("Please enter your Country.");
+        return;
+      }
       if (!mobile.trim()) {
         handleFormError("Please enter your Primary Phone Number.");
         return;
       }
-      const normMobile = normalizeMobileNumber(mobile);
-      if (!normMobile) {
-        handleFormError("Please enter a valid Primary Phone Number (e.g. 10-digit mobile number or +91 98765 43210).");
+      const primaryPhoneRes = validatePhoneNumber(mobile, country);
+      if (!primaryPhoneRes.valid || !primaryPhoneRes.e164) {
+        handleFormError(`Primary phone number is invalid: ${primaryPhoneRes.error}`);
         return;
       }
-      setMobile(normMobile);
+      setMobile(primaryPhoneRes.e164);
 
       if (!altMobile.trim()) {
         handleFormError("Please enter an Alternate Phone Number.");
         return;
       }
+      const altPhoneRes = validatePhoneNumber(altMobile, country);
+      if (!altPhoneRes.valid || !altPhoneRes.e164) {
+        handleFormError(`Alternate phone number is invalid: ${altPhoneRes.error}`);
+        return;
+      }
+      if (primaryPhoneRes.e164 === altPhoneRes.e164) {
+        handleFormError("Alternate phone number must be different from your primary phone number.");
+        return;
+      }
+      setAltMobile(altPhoneRes.e164);
+
       if (!domain.trim()) {
         handleFormError("Please select a Focus Sector / Innovation Domain.");
         return;
@@ -435,14 +436,22 @@ export default function RegisterPage() {
         return;
       }
       const cleanAadhar = aadharNumber.replace(/[\s-]/g, "");
+      if (!/^\d{12}$/.test(cleanAadhar)) {
+        handleFormError("Aadhaar Card number must be exactly 12 digits.");
+        return;
+      }
+      if (/^[01]/.test(cleanAadhar)) {
+        handleFormError("Aadhaar Card number cannot start with 0 or 1.");
+        return;
+      }
       if (!isValidAadhaar(cleanAadhar)) {
-        handleFormError("Please enter a valid 12-digit Aadhaar Card number, exactly as printed on your Aadhaar card.");
+        handleFormError("Please enter a valid 12-digit Aadhaar Card number that passes checksum verification, exactly as printed on your Aadhaar card.");
         return;
       }
       if (panNumber.trim()) {
         const cleanPan = panNumber.trim().toUpperCase();
         if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
-          handleFormError("Please enter a valid 10-character PAN Card number (e.g. ABCDE1234F) or leave blank.");
+          handleFormError("Please enter a valid 10-character PAN Card number in the format ABCDE1234F (5 letters, 4 digits, 1 letter) or leave blank.");
           return;
         }
       }
@@ -456,10 +465,6 @@ export default function RegisterPage() {
       }
       if (!state.trim()) {
         handleFormError("Please enter your State.");
-        return;
-      }
-      if (!country.trim()) {
-        handleFormError("Please enter your Country.");
         return;
       }
 
@@ -488,12 +493,12 @@ export default function RegisterPage() {
           handleFormError(`Please enter a phone number for Member #${i + 1} (${m.name}).`);
           return;
         }
-        const normMemberPhone = normalizeMobileNumber(m.phone);
-        if (!normMemberPhone) {
-          handleFormError(`Please enter a valid phone number for Member #${i + 1} (${m.name}) (e.g. 10-digit mobile number or +91 98765 43210).`);
+        const memPhoneRes = validatePhoneNumber(m.phone, country);
+        if (!memPhoneRes.valid || !memPhoneRes.e164) {
+          handleFormError(`Member #${i + 1} (${m.name}) phone number is invalid: ${memPhoneRes.error}`);
           return;
         }
-        if (!m.email.trim() || !m.email.includes("@")) {
+        if (!m.email.trim() || !/^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(m.email.trim())) {
           handleFormError(`Please enter a valid email address for Member #${i + 1} (${m.name}).`);
           return;
         }

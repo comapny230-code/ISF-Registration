@@ -13,7 +13,7 @@ import { isValidAadhaar } from "@/lib/registration/aadhaar";
 import { verifyRegistrationCode } from "@/lib/registration/email-verification";
 import { checkCaptcha } from "@/lib/registration/captcha";
 import { checkFormToken, checkHoneypot } from "@/lib/registration/form-guard";
-import { normalizeMobileNumber } from "@/lib/registration/phone";
+import { normalizeMobileNumber, validatePhoneNumber } from "@/lib/registration/phone";
 import {
   AadhaarAlreadyRegisteredError,
   AlreadyRegisteredError,
@@ -328,10 +328,13 @@ async function handleRequest(request: Request) {
       const category = String(body.category || body.role || "startup_founder");
       const teamName = String(body.teamName || body.startupName || "").trim();
       const photoUrl = typeof body.photoUrl === "string" ? body.photoUrl.trim() : null;
+      const country = String(body.country || "India").trim();
       const rawMobile = String(body.mobile || body.phoneNumber || "").trim();
-      const mobile = normalizeMobileNumber(rawMobile);
+      const mobileCheck = validatePhoneNumber(rawMobile, country);
+      const mobile = mobileCheck.e164;
       const rawAltMobile = String(body.altMobile || "").trim();
-      const altMobile = normalizeMobileNumber(rawAltMobile) || rawAltMobile;
+      const altMobileCheck = validatePhoneNumber(rawAltMobile, country);
+      const altMobile = altMobileCheck.e164;
       const domain = String(body.domain || "").trim();
       const projectDetails = String(body.projectDetails || body.projectDescription || "").trim();
       const rawProjectReport = String(body.projectReport || body.projectReportUrl || "").trim();
@@ -341,7 +344,6 @@ async function handleRequest(request: Request) {
       const panNumber = rawPan ? rawPan : null;
       const city = String(body.city || "").trim();
       const state = String(body.state || "").trim();
-      const country = String(body.country || "India").trim();
       const linkedinUrl = normalizeLinkedInUrl(String(body.linkedinUrl || ""));
 
       // Only allow Startup Leader or Student Innovator
@@ -357,17 +359,20 @@ async function handleRequest(request: Request) {
 
       // Parse structured members (1 to 5 members)
       const rawMembers: Array<any> = Array.isArray(body.members) ? body.members : [];
-      const members: Array<{ name: string; photoUrl?: string; phone: string; email: string }> = rawMembers.slice(0, 5).map((m: any) => ({
-        name: String(m?.name || "").trim(),
-        photoUrl: typeof m?.photoUrl === "string" ? m.photoUrl.trim() : undefined,
-        phone: normalizeMobileNumber(String(m?.phone || "").trim()) || String(m?.phone || "").trim(),
-        email: String(m?.email || "").toLowerCase().trim(),
-      }));
+      const members: Array<{ name: string; photoUrl?: string; phone: string; email: string }> = rawMembers.slice(0, 5).map((m: any) => {
+        const memPhoneCheck = validatePhoneNumber(String(m?.phone || "").trim(), country);
+        return {
+          name: String(m?.name || "").trim(),
+          photoUrl: typeof m?.photoUrl === "string" ? m.photoUrl.trim() : undefined,
+          phone: memPhoneCheck.e164 || String(m?.phone || "").trim(),
+          email: String(m?.email || "").toLowerCase().trim(),
+        };
+      });
 
       // Validation
       // Plain single addresses only (also keeps crafted input away from the mail address parser).
-      if (!email || !isSafeEmailAddress(email)) {
-        return Response.json({ message: "A valid email address is required." }, { status: 400 });
+      if (!email || !isSafeEmailAddress(email) || !/^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email)) {
+        return Response.json({ message: "A valid official email address with a valid domain is required." }, { status: 400 });
       }
       if (!fullName) {
         return Response.json({ message: "Full name is required." }, { status: 400 });
@@ -391,14 +396,23 @@ async function handleRequest(request: Request) {
           { status: 400 }
         );
       }
-      if (!mobile) {
+      if (!mobileCheck.valid || !mobile) {
         return Response.json(
-          { message: "A valid primary phone number is required (e.g. 10-digit mobile or +91 98765 43210)." },
+          { message: `Primary phone number is invalid: ${mobileCheck.error}` },
           { status: 400 }
         );
       }
-      if (!altMobile) {
-        return Response.json({ message: "Alternate phone number is required." }, { status: 400 });
+      if (!altMobileCheck.valid || !altMobile) {
+        return Response.json(
+          { message: `Alternate phone number is invalid: ${altMobileCheck.error}` },
+          { status: 400 }
+        );
+      }
+      if (mobile === altMobile) {
+        return Response.json(
+          { message: "Alternate phone number must be different from your primary phone number." },
+          { status: 400 }
+        );
       }
       if (!domain) {
         return Response.json({ message: "Focus Sector / Innovation Domain is required." }, { status: 400 });
@@ -418,7 +432,16 @@ async function handleRequest(request: Request) {
       if (!linkedinUrl) {
         return Response.json({ message: "LinkedIn profile URL is required." }, { status: 400 });
       }
-      if (!aadharNumber || !isValidAadhaar(aadharNumber)) {
+      if (!aadharNumber) {
+        return Response.json({ message: "Aadhaar Card number is required." }, { status: 400 });
+      }
+      if (!/^\d{12}$/.test(aadharNumber)) {
+        return Response.json({ message: "Aadhaar Card number must be exactly 12 digits." }, { status: 400 });
+      }
+      if (/^[01]/.test(aadharNumber)) {
+        return Response.json({ message: "Aadhaar Card number cannot start with 0 or 1." }, { status: 400 });
+      }
+      if (!isValidAadhaar(aadharNumber)) {
         return Response.json(
           { message: "A valid 12-digit Aadhaar Card number is required. Please check it against your Aadhaar card." },
           { status: 400 }
