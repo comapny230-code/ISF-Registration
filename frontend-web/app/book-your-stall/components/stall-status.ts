@@ -25,7 +25,7 @@ export function stallMark(stall: SnapshotStall): string {
 }
 
 export function hasGeometry(stall: SnapshotStall): boolean {
-  return stall.x !== null && stall.y !== null && stall.rot !== null;
+  return typeof stall.x === "number" && typeof stall.y === "number";
 }
 
 const IST = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });

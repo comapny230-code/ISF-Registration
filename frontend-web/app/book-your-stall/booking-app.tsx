@@ -51,6 +51,7 @@ export function BookingApp({ displayName }: { displayName: string }) {
   const [downloading, setDownloading] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [currentDisplayName, setCurrentDisplayName] = useState(displayName);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const pollerRef = useRef<StatusPoller<Snapshot> | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
 
@@ -82,10 +83,15 @@ export function BookingApp({ displayName }: { displayName: string }) {
       fetchSnapshot: bookingApi.snapshot,
       onSnapshot: (s, receivedAt) => {
         setSnapshot(s);
+        setLoadError(null);
         setOffsetMs(serverOffsetMs(s.serverNow, receivedAt));
       },
       onError: (err) => {
-        if (err instanceof ApiError && err.status === 401) setMe(null);
+        if (err instanceof ApiError && err.status === 401) {
+          setMe(null);
+        } else {
+          setLoadError("Unable to load the venue map. Please retry or check back shortly.");
+        }
       },
     });
     pollerRef.current = poller;
@@ -299,7 +305,23 @@ export function BookingApp({ displayName }: { displayName: string }) {
         )}
 
         {!snapshot ? (
-          <p className="muted">Loading the venue…</p>
+          loadError ? (
+            <div className="notice notice-warn" role="alert" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+              <span>{loadError}</span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setLoadError(null);
+                  void pollerRef.current?.refresh();
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <p className="muted">Loading the venue…</p>
+          )
         ) : snapshot.zones.length === 0 || snapshot.stalls.length === 0 ? (
           // Zones can exist before any stall is loaded (inventory awaiting organiser approval).
           <div className="notice notice-warn" data-testid="layout-pending">
