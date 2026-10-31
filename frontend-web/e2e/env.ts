@@ -16,8 +16,6 @@ export const E2E_ENV = {
   HOLD_TOKEN_KEYS: "e2e:e2e-hold-token-key-0123456789abcdef0",
   FEATURE_BOOKING_UI: "true",
   REGISTRATION_MIN_FILL_SECONDS: "0",
-  // Registration is closed unless explicitly opened (kill switch); tests exercise the open form.
-  REGISTRATION_OPEN: "true",
 };
 
 /** The guarded e2e database on the developer-supplied local test server. */

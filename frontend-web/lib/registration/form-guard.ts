@@ -6,21 +6,11 @@
  * Neither stops a determined attacker on its own; the email code and rate limits do the rest.
  */
 import { createHmac } from "node:crypto";
-import { getAppEnv, getAuthConfig, getFeatureFlags } from "../config";
+import { getAppEnv, getAuthConfig } from "../config";
 import { constantTimeEqual } from "../auth/crypto";
 import { HttpError } from "../http";
 
 export const HONEYPOT_FIELD = "website";
-
-export const REGISTRATION_PAUSED_MESSAGE =
-  "Registration is paused for maintenance. No new registrations or email codes are being accepted right now. Please check back later.";
-
-/** Registration kill switch (REGISTRATION_OPEN). Checked before any database work or email. */
-export function assertRegistrationOpen(): void {
-  if (!getFeatureFlags().registrationOpen) {
-    throw new HttpError(503, "REGISTRATION_PAUSED", REGISTRATION_PAUSED_MESSAGE, undefined, { "Retry-After": "3600" });
-  }
-}
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Seconds a person needs at least to fill the form in. Lower only in local/test runs. */

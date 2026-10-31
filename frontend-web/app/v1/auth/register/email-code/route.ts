@@ -4,7 +4,6 @@ import { consumeRateLimit, LIMITS } from "@/lib/auth/rate-limit";
 import { getDb } from "@/lib/db";
 import { assertSameOriginJson, clientAddress, handler, HttpError, json, readJsonObject, strict, v } from "@/lib/http";
 import { issueRegistrationCode, sendRegistrationCodeEmail } from "@/lib/registration/email-verification";
-import { assertRegistrationOpen } from "@/lib/registration/form-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +13,6 @@ export const dynamic = "force-dynamic";
  */
 export const POST = handler(async (request, { requestId }) => {
   assertSameOriginJson(request);
-  assertRegistrationOpen();
   const { email } = strict(await readJsonObject(request), { email: v.email });
 
   const sql = await getDb();

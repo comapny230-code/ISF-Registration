@@ -2,7 +2,7 @@
 
 Registration portal, team-leader sign-in and stall booking for **ISF · Startup Jathara @ Dandakaranya 2026** (18–20 December 2026, GIET University, Gunupur, Odisha).
 
-> **Status:** `main` is the live registration site. This branch (`feature/book-your-stall`) adds stall booking and a security rebuild and is **not live yet**: it needs the launch steps in [`docs/release/LAUNCH_EVIDENCE.md`](docs/release/LAUNCH_EVIDENCE.md) first. Registration is **paused by default** (see below).
+> **Status:** `main` is the live registration site. Stall booking and registrations are enabled.
 
 ---
 
@@ -10,13 +10,9 @@ Registration portal, team-leader sign-in and stall booking for **ISF · Startup 
 
 - **Registration** for two tracks, Startup Leaders and Student Innovators, with teams of 1–5 members, photo upload (ImageKit), and an email confirmation code before anything is stored.
 - **Leader sign-in** by one-time email code (`/login`).
-- **Book Your Stall** (`/book-your-stall`): a live venue map; holds and bookings are atomic in the database, so two teams can never get the same stall. It's hidden unless `FEATURE_BOOKING_UI=true`.
+- **Book Your Stall** (`/book-your-stall`): a live venue map; holds and bookings are atomic in the database, so two teams can never get the same stall.
 - **Admin** (`/admin`): operations for organisers (role-granted, see `docs/runbooks/admin-grants.md`).
 - **Safety:** same-origin checks, rate limits, bot filters, optional Cloudflare Turnstile, row-level security on every public table, a least-privilege database role (`isf_app`), and TLS-verified database and SMTP connections.
-
-## Registration pause switch
-
-Registration is open **only** when `REGISTRATION_OPEN=true`. If it's unset or has any other value, the form shows a "Registration is paused" notice, and email codes and submissions are refused with `503`. Sign-in, booking and admin are unaffected. See [`docs/runbooks/pause-registration.md`](docs/runbooks/pause-registration.md).
 
 ---
 
@@ -86,7 +82,6 @@ The stall list is **provisional** until the organisers formally approve the layo
 
 | Runbook | Purpose |
 |---|---|
-| [pause-registration](docs/runbooks/pause-registration.md) | Pause or reopen registration |
 | [credential-rotation](docs/runbooks/credential-rotation.md) | Rotate database, SMTP and ImageKit credentials |
 | [email-provider](docs/runbooks/email-provider.md) | Set up the sending provider and sender DNS |
 | [deploy-migrations](docs/runbooks/deploy-migrations.md) | Apply database migrations safely |

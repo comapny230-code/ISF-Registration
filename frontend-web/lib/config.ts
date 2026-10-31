@@ -322,12 +322,9 @@ export function getBookingConfig(env: Env = process.env): BookingConfig {
 // static pages still build; booking APIs enforce their own configuration).
 // ---------------------------------------------------------------------------
 
-export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean; registrationOpen: boolean } {
+export function getFeatureFlags(env: Env = process.env): { bookingUi: boolean } {
   return {
     bookingUi: env.FEATURE_BOOKING_UI?.trim() !== "false",
-    // Registration kill switch: closed unless explicitly "true", so a missing or mistyped
-    // setting pauses registration instead of opening it. Takes effect on the next request.
-    registrationOpen: env.REGISTRATION_OPEN?.trim() === "true",
   };
 }
 
