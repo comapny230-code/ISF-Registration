@@ -27,9 +27,14 @@ export default function Home() {
       </p>
 
       <div className="actions">
-        <Link href="/register" className="btn btn-primary btn-large">
+        <a
+          href="https://docs.google.com/forms/d/e/1FAIpQLSclfkUey6kqmsxTEwQporewODZJzRqPwQVaVOzRjkry6HIbWQ/viewform"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-primary btn-large"
+        >
           Summit Registration →
-        </Link>
+        </a>
         {showBooking && (
           <Link href="/book-your-stall" className="btn btn-forest btn-large">
             Book Your Stall →

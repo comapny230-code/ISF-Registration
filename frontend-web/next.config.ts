@@ -25,7 +25,12 @@ const config: NextConfig = {
     return [
       {
         source: "/signup",
-        destination: "/register",
+        destination: "https://docs.google.com/forms/d/e/1FAIpQLSclfkUey6kqmsxTEwQporewODZJzRqPwQVaVOzRjkry6HIbWQ/viewform",
+        permanent: true,
+      },
+      {
+        source: "/register",
+        destination: "https://docs.google.com/forms/d/e/1FAIpQLSclfkUey6kqmsxTEwQporewODZJzRqPwQVaVOzRjkry6HIbWQ/viewform",
         permanent: true,
       },
     ];
