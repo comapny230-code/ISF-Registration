@@ -265,7 +265,13 @@ export function BookingApp({ displayName }: { displayName: string }) {
                 >
                   Sign In as Leader
                 </button>
-                <a href="/register" className="btn btn-secondary" style={{ padding: "8px 16px", textDecoration: "none" }}>
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLSclfkUey6kqmsxTEwQporewODZJzRqPwQVaVOzRjkry6HIbWQ/viewform"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary"
+                  style={{ padding: "8px 16px", textDecoration: "none" }}
+                >
                   Register Team
                 </a>
               </div>

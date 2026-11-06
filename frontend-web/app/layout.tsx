@@ -65,14 +65,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </svg>
                 <span>Book Stall</span>
               </Link>
-              <Link
-                href="/register"
-                className="nav-btn-register"
-                aria-label="Register"
-              >
-                <span>Register</span>
-                <span className="btn-arrow">→</span>
-              </Link>
             </div>
           </div>
         </header>
